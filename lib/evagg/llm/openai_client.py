@@ -179,7 +179,7 @@ class OpenAIClient(IPromptClient):
     async def embeddings(
         self, inputs: List[str], embedding_settings: Optional[Dict[str, Any]] = None
     ) -> Dict[str, List[float]]:
-        settings = {"model": "text-embedding-ada-002-v2", **(embedding_settings or {})}
+        settings = {"model": "text-embedding-3-small", **(embedding_settings or {})}
 
         embeddings = {}
 
