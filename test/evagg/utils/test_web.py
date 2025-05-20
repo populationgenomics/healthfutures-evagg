@@ -2,10 +2,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from pymongo.errors import DuplicateKeyError
 from pytest import raises
 
-from lib.evagg.utils import CosmosCachingWebClient, RequestsWebContentClient
+from lib.evagg.utils import MongoDBCachingWebClient, RequestsWebContentClient
 
 
 def test_settings():
@@ -81,37 +81,43 @@ def test_retry_failed(mock_get_conn):
 
 
 @pytest.fixture
-def mock_container(json_load):
-    class Container:
+def mock_mongo_collection(json_load):
+    class Collection:
         def __init__(self, cache):
-            self.cache = cache
+            self.cache = {}
+            for key, value in cache.items():
+                self.cache[key] = value
             self.hits = []
             self.misses = []
             self.writes = []
 
-        def read_item(self, item, partition_key):
-            assert item == partition_key
-            if item in self.cache:
-                self.hits.append(item)
-                return self.cache[item]
-            self.misses.append(item)
-            raise CosmosResourceNotFoundError()
+        def find_one(self, query):
+            item_id = query["id"]
+            if item_id in self.cache:
+                self.hits.append(item_id)
+                return self.cache[item_id]
+            self.misses.append(item_id)
+            return None
 
-        def upsert_item(self, item):
-            assert item["id"] not in self.cache
+        def insert_one(self, item):
+            if item["id"] in self.cache:
+                raise DuplicateKeyError("Duplicate key error")
             self.cache[item["id"]] = item
             self.writes.append(item)
-            return item
+            return MagicMock()
 
-    return Container(json_load("cosmos_cache.json"))
+        def create_index(self, field, **kwargs):
+            return True
+
+    return Collection(json_load("cosmos_cache.json"))
 
 
-@patch("lib.evagg.utils.web.CosmosClient")
-def test_cosmos_cache_hit(mock_client, mock_container):
-    mock_client.return_value.get_database_client.return_value.get_container_client.return_value = mock_container
+@patch("pymongo.MongoClient")
+def test_mongodb_cache_hit(mock_client, mock_mongo_collection):
+    mock_client.return_value.__getitem__.return_value.__getitem__.return_value = mock_mongo_collection
 
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=CPA6&sort=relevance&retmax=1&tool=biopython"  # noqa
-    web_client = CosmosCachingWebClient(cache_settings={"endpoint": "http://localhost", "credential": "test"})
+    web_client = MongoDBCachingWebClient(cache_settings={"endpoint": "localhost:27017"})
     assert web_client.get(url, content_type="xml", url_extra="this doesn't matter").tag == "eSearchResult"
     assert web_client.get(url, content_type="xml").tag == "eSearchResult"
 
@@ -119,15 +125,15 @@ def test_cosmos_cache_hit(mock_client, mock_container):
     assert web_client.get(url, content_type="json", url_extra="extra")["reports"][0]["query"][0] == "CPA6"
     assert web_client.get(url, content_type="json")["reports"][0]["query"][0] == "CPA6"
 
-    assert len(mock_container.misses) == 0
-    assert len(mock_container.hits) == 4
-    assert len(mock_container.writes) == 0
+    assert len(mock_mongo_collection.misses) == 0
+    assert len(mock_mongo_collection.hits) == 4
+    assert len(mock_mongo_collection.writes) == 0
 
 
 @patch("requests.sessions.Session.request")
-@patch("lib.evagg.utils.web.CosmosClient")
-def test_cosmos_cache_miss(mock_client, mock_request, mock_container):
-    mock_client.return_value.get_database_client.return_value.get_container_client.return_value = mock_container
+@patch("pymongo.MongoClient")
+def test_mongodb_cache_miss(mock_client, mock_request, mock_mongo_collection):
+    mock_client.return_value.__getitem__.return_value.__getitem__.return_value = mock_mongo_collection
     mock_request.side_effect = [
         MagicMock(status_code=200, text='<?xml version="1.0" encoding="UTF-8" ?><eSearchResult>GGG6</eSearchResult>'),
         MagicMock(status_code=200, text='{"reports": [{"query": ["GGG6"]}]}'),
@@ -139,7 +145,7 @@ def test_cosmos_cache_miss(mock_client, mock_request, mock_container):
     ]
 
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=GGG6&sort=relevance&retmax=1&tool=biopython"  # noqa
-    web_client = CosmosCachingWebClient(cache_settings={"endpoint": "http://localhost", "credential": "test"})
+    web_client = MongoDBCachingWebClient(cache_settings={"endpoint": "localhost:27017"})
     web_client.update_settings(retry_codes=[500], no_raise_codes=[422])
     assert web_client.get(url, content_type="xml", url_extra="this doesn't matter").tag == "eSearchResult"
     assert web_client.get(url, content_type="xml").tag == "eSearchResult"
@@ -166,6 +172,18 @@ def test_cosmos_cache_miss(mock_client, mock_request, mock_container):
     with raises(requests.exceptions.HTTPError):
         web_client.get(url, content_type="json")
 
-    assert len(mock_container.misses) == 7
-    assert len(mock_container.writes) == 4
-    assert len(mock_container.hits) == 4
+    assert len(mock_mongo_collection.misses) == 7
+    assert len(mock_mongo_collection.writes) == 4
+    assert len(mock_mongo_collection.hits) == 4
+
+
+@patch("pymongo.MongoClient")
+def test_mongodb_auth_connection(mock_client):
+    MongoDBCachingWebClient(cache_settings={
+        "endpoint": "localhost:27017", 
+        "username": "user", 
+        "password": "pass"
+    })
+    
+    # Verify that the correct connection string was used
+    mock_client.assert_called_once_with("mongodb://user:pass@localhost:27017")

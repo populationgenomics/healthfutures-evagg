@@ -4,11 +4,11 @@ import logging
 import urllib.parse
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import pymongo
 import requests
-from azure.cosmos import ContainerProxy, CosmosClient
-from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from defusedxml import ElementTree
 from pydantic import BaseModel, Extra, validator
+from pymongo.collection import Collection
 from requests.adapters import HTTPAdapter, Retry
 
 from .interfaces import IWebContentClient
@@ -104,27 +104,43 @@ class RequestsWebContentClient(IWebContentClient):
 
 class CacheClientSettings(BaseModel, extra=Extra.forbid):
     endpoint: str
-    credential: Any
+    username: Optional[str] = None
+    password: Optional[str] = None
     database: str = "document_cache"
-    container: str = "cache"
+    collection: str = "cache"
     no_cache_codes: List[int] = []
 
 
-class CosmosCachingWebClient(RequestsWebContentClient):
-    """A web content client that uses a lookaside CosmosDB cache."""
+class MongoDBCachingWebClient(RequestsWebContentClient):
+    """A web content client that uses a lookaside MongoDB cache."""
 
     def __init__(self, cache_settings: Dict[str, Any], web_settings: Optional[Dict[str, Any]] = None) -> None:
         self._cache_settings = CacheClientSettings(**cache_settings)
-        self._cache = CosmosClient(self._cache_settings.endpoint, self._cache_settings.credential)
-        self._container: Optional[ContainerProxy] = None
+        
+        # Setup MongoDB connection
+        if self._cache_settings.username and self._cache_settings.password:
+            # Authenticated connection
+            connection_string = f"mongodb://{self._cache_settings.username}:{self._cache_settings.password}@{self._cache_settings.endpoint}"
+        else:
+            # Unauthenticated connection
+            connection_string = f"mongodb://{self._cache_settings.endpoint}"
+            
+        self._mongo_client = pymongo.MongoClient(connection_string)
+        self._collection: Optional[Collection] = None
         super().__init__(settings=web_settings)
 
-    def _get_container(self) -> ContainerProxy:
-        if self._container:
-            return self._container
-        database = self._cache.get_database_client(self._cache_settings.database)
-        self._container = database.get_container_client(self._cache_settings.container)
-        return self._container
+    def _get_collection(self) -> Collection:
+        """Get the MongoDB collection, initializing it if necessary."""
+        if self._collection is not None:
+            return self._collection
+        
+        database = self._mongo_client[self._cache_settings.database]
+        self._collection = database[self._cache_settings.collection]
+        
+        # Create an index on the id field for faster lookups
+        self._collection.create_index("id", unique=True)
+        
+        return self._collection
 
     def get(
         self,
@@ -143,23 +159,27 @@ class CosmosCachingWebClient(RequestsWebContentClient):
 
         if data is not None:
             cache_key += f"&POST={self._invariant_hash(json.dumps(data))}"
-        container = self._get_container()
+        
+        collection = self._get_collection()
 
-        try:
-            # Attempt to get the item from the cache.
-            item = container.read_item(item=cache_key, partition_key=cache_key)
-            logger.debug(f"{item['url']} served from {self._cache_settings.database}/{self._cache_settings.container}.")
+        # Attempt to get the item from the cache
+        item = collection.find_one({"id": cache_key})
+        
+        if item:
+            logger.debug(f"{item['url']} served from {self._cache_settings.database}/{self._cache_settings.collection}.")
             code = item.get("status_code", 200)
-        except CosmosResourceNotFoundError:
-            # If the item is not in the cache, fetch it from the web.
+        else:
+            # If the item is not in the cache, fetch it from the web
             code, content = super()._get_content(url + (url_extra or ""), data)
             item = {"id": cache_key, "url": url, "status_code": code, "content": content}
-            # Don't cache the response if it's a retryable/transient error or excluded code.
+            
+            # Don't cache the response if it's a retryable/transient error or excluded code
             if code not in self._settings.retry_codes and code not in self._cache_settings.no_cache_codes:
-                container.upsert_item(item)
+                collection.insert_one(item)
 
         self._raise_for_status(code)
         return super()._transform_content(item["content"], content_type)
 
     def _invariant_hash(self, input: str) -> str:
+        """Create a hash of the input string."""
         return hashlib.sha256(input.encode("utf-8")).hexdigest()

@@ -22,9 +22,6 @@ Evidence Aggregator runs at the Linux command line and depends on access to mult
 - **git**
 - **make** [optional] only for [development tasks](README.md#pre-pr-checks)
 - **jq** [optional] only for [development tasks](README.md#pre-pr-checks)
-- **Azure CLI** [optional] only if using [AOAI RBAC authorization](#authentication-to-aoai)
-
-  ```curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash```
 
 ## Clone the repository
 
@@ -60,91 +57,102 @@ run_evagg_app -h
 
 ## Deploy external resources
 
-Evidence Aggregator may need to call out to various external resources (e.g. web endpoints or Azure services) during a given pipeline run. The following sections explain how these resources can be deployed and what settings are available to control how they are accessed during the run. All appropriate resource-specific configuration settings are provided to Evidence Aggregator at pipeline app runtime (as described below in [Configuration settings](#configuration-settings).
+Evidence Aggregator may need to call out to various external resources (e.g. web endpoints, MongoDB, LLM services) during a given pipeline run. The following sections explain how these resources can be deployed and what settings are available to control how they are accessed during the run. All appropriate resource-specific configuration settings are provided to Evidence Aggregator at pipeline app runtime (as described below in [Configuration settings](#configuration-settings).
 
-## Azure OpenAI (AOAI) Service
+## OpenAI API Access
 
-The only Azure resource strictly required to run the Evidence Aggregator pipeline is an AOAI Service instance, which can be created from within the Azure portal using [these instructions](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/create-resource?pivots=web-portal). Once the AOAI Service is created, [deploy a model](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/create-resource?pivots=web-portal#deploy-a-model) on it that has sufficient capabilities to run the example EvAgg pipeline app. Specifically, the pipeline currently requires a model that supports at least 128k tokens of input context and [json output mode](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/json-mode?tabs=python). Current models that meet these two requirements are `gpt-4` (`1106-preview` or newer), `gpt-4o`, and `gpt-4o-mini`. See [this article](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?tabs=python-secure) for a discussion of the differences between them. Make sure you have sufficient quota (at least 100k TPM or equivalent) allocated to your model deployment.
+The Evidence Aggregator pipeline requires access to an LLM via the OpenAI API. You can use:
 
-### Authentication to AOAI
+1. **Standard OpenAI API**: Use your API key directly with api.openai.com
+2. **LiteLLM Gateway**: Set up a [LiteLLM proxy](https://docs.litellm.ai/docs/proxy/quick_start) to access various providers (Azure OpenAI, Anthropic, etc.)
 
-Authentication to the AOAI Service REST APIs can be done either using EntraID and role-based access control (RBAC) or shared keys. RBAC-based auth is recommended, but the EvAgg pipeline currently supports either.
+The pipeline requires a model that supports at least 128k tokens of input context and JSON mode/structured output. Models that meet these requirements include `gpt-4` (`1106-preview` or newer), `gpt-4o`, and `gpt-4o-mini`.
+Make sure you have sufficient usage limits or quota (at least 100k TPM or equivalent) for your chosen model.
 
-- Option 1 - RBAC: In this mode, the pipeline uses the credentials of the logged-in user to authenticate to AOAI. When running the pipeline, ensure that you have run `az login` and have a current credential for an identity with (at minimum) the `Cognitive Services OpenAI User` role for your endpoint.
-- Option 2 - Shared key: In this mode, the pipeline uses a key value provided at runtime to authenticate with AOAI. Make note of the shared key for your AOAI endpoint from within the Azure portal and supply it in the AOAI configuration settings.
+### Configuration settings for OpenAI
 
-Regardless of your choice on Authentication method above, you will also need to make note of the endpoint for AOAI Service Resource (typically `https://<your_resource_name>.openai.azure.com/`) and the name of the model deployment that you configured in the Azure Portal for use in configuration settings.
+- **OPENAI_MODEL** - The model to use (e.g., `gpt-4-turbo`, `gpt-4o`)
+- **OPENAI_API_KEY** - Your OpenAI API key
+- **OPENAI_BASE_URL** [optional] - Custom API endpoint for LiteLLM or other services
+- **OPENAI_ORGANIZATION** [optional] - Your OpenAI organization ID if applicable
+- **OPENAI_MAX_PARALLEL_REQUESTS** [optional] - Controls the maximum number of concurrent requests to the API - leave it out or set to 0 (no max) unless you need to reduce concurrency
 
-### Configuration settings for AOAI
+### Using LiteLLM to connect to Azure OpenAI or other providers
 
-- **AZURE_OPENAI_DEPLOYMENT** - set this to the model deployment name that you configured above (not necessarily the name of the model itself - the model deployment name is customizable during deployment configuration)
-- **AZURE_OPENAI_ENDPOINT** - set this to the web endpoint for your AOAI Service Resource (typically "https://<your_resource_name>.openai.azure.com")
-- **AZURE_OPENAI_API_KEY** [optional] - set this to one of your AOAI Service Resource's shared keys (only needed if you are using shared key-based authentication)
-- **AZURE_OPENAI_API_VERSION** - set this to an AOAI API version supported by your deployment (Note, currently only tested against "2024-02-15-preview")
-- **AZURE_OPENAI_MAX_PARALLEL_REQUESTS** [optional] - this controls the maximum number of concurrent outstanding requests being made to the AOAI endpoint - leave it out or set it to 0 (no max) unless you need to reduce the concurrency
+If you need to use Azure OpenAI or other LLM providers, we recommend using [LiteLLM](https://docs.litellm.ai/) as a proxy server:
+
+1. Install LiteLLM: `pip install litellm`
+2. Create a basic configuration file `litellm.config.yaml`:
+```yaml
+model_list:
+  - model_name: gpt-4-turbo
+    litellm_params:
+      model: azure/gpt-4-turbo
+      api_base: https://your-azure-endpoint.openai.azure.com/
+      api_key: your-azure-api-key
+      api_version: 2024-02-15-preview
+```
+3. Start the LiteLLM proxy: `litellm --config litellm.config.yaml --port 4000`
+4. Configure Evidence Aggregator to use the proxy by setting:
+   - `OPENAI_BASE_URL="http://localhost:4000"`
+   - `OPENAI_API_KEY="lm-temp"` (a dummy key, as authentication is handled by the proxy)
+
+Refer to the [LiteLLM documentation](https://docs.litellm.ai/docs/proxy/quick_start) for more advanced configurations and options.
 
 
-## [Optional] Azure CosmosDB database
+## [Optional] MongoDB database
 
 This pipeline makes a substantial number of reference lookup calls to external web resources, most notably NCBI's E-utilities service and the Mutalyzer service.
-These calls can contribute substantially to pipeline execution time as access to those web services is rate limited in accordance with their usage guidelines. To speed up repeated execution of identical lookup calls to these services across pipeline runs, Evidence Aggregator can be configured to use an Azure CosmosDB instance as a results lookup cache keyed by the full URL/query string of the external service call.
+These calls can contribute substantially to pipeline execution time as access to those web services is rate limited in accordance with their usage guidelines. To speed up repeated execution of identical lookup calls to these services across pipeline runs, Evidence Aggregator can be configured to use a MongoDB instance as a results lookup cache keyed by the full URL/query string of the external service call.
 
-1. Create an Azure CosmosDB account using [these instructions](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-portal). For the most part, the default settings are likely suitable for your application, but you may apply/consider the following changes:
-    1. Select a unique name for your CosmosDB account and make note of it as it will be used in subsequent configuration steps
-    2. If your runtime environment is an Azure VM, you should consider deploying your CosmosDB Account in the same region
-    3. Under capacity mode, switch the selection to "Serverless" as the sustained load for cache lookup calls is minimal
-2. Within that new account, create a database and container using [these instructions](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-portal#create-a-database-and-container). Use the following settings
-    1. For the Database id, ensure that "Create new" is selected and enter `document_cache`
-    2. For the Container id, enter `cache`
-    3. For the Partition key, enter `/id`
-3. If using EntraID-based authentication and authorization (recommended), configure role assignment settings for your CosmosDB account.
-    - First, create a JSON file describing a cosmosdb SQL role definition.
+1. Install MongoDB on your local machine or use a hosted MongoDB service:
+   - **Local installation**: Follow the [MongoDB installation guide](https://www.mongodb.com/docs/manual/administration/install-community/) for your operating system.
+   - **Hosted service**: Use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) to create a free tier cluster.
 
-    ```bash
-    cat << EOF >> cache_role.json
-    {
-      "Id": "$(uuidgen)",
-      "RoleName": "cache_role",
-      "Type": "CustomRole",
-      "AssignableScopes": ["/dbs/document_cache/colls/cache"],
-      "Permissions": [{
-        "DataActions": [
-          "Microsoft.DocumentDB/databaseAccounts/readMetadata",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/executeQuery",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/read",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/create",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/replace",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/upsert",
-          "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/delete"
-        ]
-      }]
-    }
-    EOF
-    ```
+2. Create a database and collection:
+   - Launch the MongoDB shell with `mongosh`
+   - Create a database: `use document_cache`
+   - Create a collection: `db.createCollection("cache")`
+   - Create an index on the id field for faster lookups: `db.cache.createIndex({"id":1}, {unique: true})`
 
-    - Next, create that role on your CosmosDB Account. Ensure that you are logged into `az cli` as an identity with sufficient privileges for this operation
+3. (Optional) If you require authentication, create a user with appropriate permissions:
+   ```bash
+   use document_cache
+   db.createUser({
+     user: "evagg_user",
+     pwd: "your_password",
+     roles: [
+       { role: "readWrite", db: "document_cache" }
+     ]
+   })
+   ```
 
-    ```bash
-    az cosmosdb sql role definition create -a <your comsosdb account> -g <your resource group> --body cache_role.json
-    rm cache_role.json
-    ```
+### Configuration settings for MongoDB
 
-    - Lastly, assign this role to the identity that will be running the pipeline
+Configure the following settings in your .env file:
 
-    ```bash
-    az cosmosdb sql role assignment create -a <your cosmosdb account> -g <your resource group> \
-      --role-definition-name "cache_role" \
-      --scope "/dbs/document_cache/colls/cache" \
-      --principal-id $(az ad signed-in-user show --query id --output tsv)
-    ```
+- **EVAGG_CONTENT_CACHE_ENDPOINT** - Set this to your MongoDB server address (e.g., "localhost:27017")
+- **EVAGG_CONTENT_CACHE_USERNAME** [optional] - Set this to your MongoDB username if using authentication
+- **EVAGG_CONTENT_CACHE_PASSWORD** [optional] - Set this to your MongoDB password if using authentication
+- **EVAGG_CONTENT_CACHE_DATABASE** [optional] - Set this to your MongoDB database name (default: "document_cache")
+- **EVAGG_CONTENT_CACHE_COLLECTION** [optional] - Set this to your MongoDB collection name (default: "cache")
 
-    Alternatively, if using shared key-based authentication, make note of the Primary Key for your CosmosDB account from within the Azure Portal for use in configuration settings.
+### Using MongoDB Atlas
 
-### Configuration settings for CosmosDB
+If you're using MongoDB Atlas:
 
-- **EVAGG_CONTENT_CACHE_ENDPOINT** - set this to the web endpoint for your CosmosDB instance (typically "https://<your_consmosdb_name>.documents.azure.com:443/")
-- **EVAGG_CONTENT_CACHE_CREDENTIAL** [optional] - set this to the secret account key associated with your CosmosDB (only needed if you are using shared key-based authentication)
-- **EVAGG_CONTENT_CACHE_CONTAINER** [optional] - set this to the container within your CosmosDB instance that contains the cache records (default: "cache")
+1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+2. Create a database user with readWrite permissions
+3. Set up network access to allow connections from your IP address
+4. Get your connection string from Atlas (it will look like `mongodb+srv://username:password@cluster.mongodb.net/`)
+5. Configure your .env file with:
+   - **EVAGG_CONTENT_CACHE_ENDPOINT** - Set this to your MongoDB Atlas hostname (e.g., "cluster.mongodb.net")
+   - **EVAGG_CONTENT_CACHE_USERNAME** - Your Atlas database username
+   - **EVAGG_CONTENT_CACHE_PASSWORD** - Your Atlas database password
+
+### Note on CosmosDB compatibility
+
+If you are using Azure CosmosDB with the MongoDB API, you can still use this client by configuring it with your CosmosDB connection string that uses the MongoDB API endpoint.
 
 ## [Optional] NCBI E-utilities
 
@@ -166,9 +174,8 @@ Once all required and optional external resources have been deployed, the approp
 There is a `template.env` file at the repo root that can be used as a starting point for configuring your own local `.env` file. Here is an minimal example `.env` file that can be used for a basic test of pipeline functionality if your AOAI Service Resource is configured for EntraID-based authentication/authorization.
 
 ```bash
-AZURE_OPENAI_DEPLOYMENT="gpt-4-1106-preview" # whatever model name you chose during model deployment
-AZURE_OPENAI_ENDPOINT="https://<your_aoai_resource>.openai.azure.com" # https endpoint for AOAI API calls
-AZURE_OPENAI_API_VERSION="2024-02-15-preview"
+OPENAI_MODEL="gpt-4-turbo" # or another suitable model
+OPENAI_API_KEY="your-openai-api-key"
 ```
 
 As an alternative to `dotenv` file-based settings, the `lib.evagg.utils.get_env_settings` pipeline utility component is analogous to `get_dotenv_settings` and can be used to read configuration settings in directly from environment variables.
@@ -177,7 +184,7 @@ As an alternative to `dotenv` file-based settings, the `lib.evagg.utils.get_env_
 
 The `lib/config/evagg_pipeline_example.yaml` app spec is a good starting place for your first full-featured execution of the pipeline. By default, this app is configured to use EntraID/RBAC auth for the AOAI Service and no caching for external web lookup calls. The configuration in the various `yaml` specs comprising the app can be modified before running to change the default behavior. For example:
 
-- **For key-based authentication to the AOAI Service:** Make sure **AZURE_OPENAI_API_KEY** is populated in your `.env` file with the appropriate key. Then comment out the `token_provider` section in each of `lib/config/objects/llm.yaml` and `lib/config/objects/llm_cache.yaml`. On `lib.evagg.llm.aoai.OpenAIClient` initialization as defined by these specs, this will leave the `token_provider` field of the `config` dictionary empty and force it to use shared key-based auth. In this case the `get_dotenv_settings` provider will have read the key in from the `.env` file and automatically populated the `api_key` field in `config`.
+- **For connecting to Azure OpenAI or other services via LiteLLM:** Make sure your LiteLLM proxy is configured and running, and set `OPENAI_BASE_URL` to point to your LiteLLM proxy URL (e.g., `http://localhost:4000`). You can also directly configure the `base_url` in `lib/config/objects/llm.yaml` and `lib/config/objects/llm_cache.yaml` by uncommenting the `base_url` line.
 - **For CosmosDB-based caching of external web lookup calls:** Make sure **EVAGG_CONTENT_CACHE_ENDPOINT** is populated in your `.env` file with the appropriate endpoint. Then, in `lib/config/evagg_pipeline_example.yaml`, uncomment the three commented-out lines that terminate in `_cache.yaml` and comment out each of their counterparts. This will swap out the non-caching `lib.evagg.utils.web.RequestsWebContentClient` implementers of `lib.evagg.utils.IWebContentClient` in the default web client sub-specs for the caching implementers in the `_cache.yaml` sub-specs. Each `_cache.yaml` sub-spec (e.g. `lib/config/objects/web_cache.yaml`) ultimately resolves to an instance of `lib.evagg.utils.web.CosmosCachingWebClient` that uses `get_dotenv_settings` to populate its endpoint/auth values from the **EVAGG_CONTENT_CACHE_** values in the `.env` file.
 - **For key-based authentication to the CosmosDB cache:** Make sure **EVAGG_CONTENT_CACHE_CREDENTIAL** is populated in your `.env` file with the appropriate key. Then comment out the `credential` section in `lib/config/objects/web_cache.yaml`. Much like the AOAI case above, on `lib.evagg.utils.web.CosmosCachingWebClient` initialization this will leave the `credential` field of the `cache_settings` dictionary empty and force it to use shared key-based auth. In this case the `get_dotenv_settings` provider will have read the key in from the `.env` file and automatically populated the `credential` field in `cache_settings`.
 
@@ -187,7 +194,6 @@ You can create your own pipeline apps by modifying sub-specs as necessary and as
 
 The script `run_evagg_app` is used to execute a pipeline app. It has one required argument - a pointer to an app spec `yaml` file that implements `lib.evagg.IEvAggApp` - and is invoked from the repository root. To execute the example app as configured above, run the following command. It will perform a PubMed query for a subset of potential papers with two query genes and write the resulting publication evidence table to file in the output directory. In a single test run, the pipeline identified 15 unique observations from a total of 4 publications considered in this configuration.
 
-**_Note: If you are using RBAC-based auth to any Azure services, ensure that you have run `az login` and have a current credential for an identity that is authorized to perform the desired operations._**
 
 ```bash
 run_evagg_app lib/config/evagg_pipeline_example.yaml

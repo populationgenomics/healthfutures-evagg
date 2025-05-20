@@ -6,7 +6,7 @@ from functools import lru_cache, reduce
 from typing import Any, Dict, Iterable, List, Optional
 
 import openai
-from openai import AsyncAzureOpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 from openai.types import CreateEmbeddingResponse
 from openai.types.chat import (
     ChatCompletionMessageParam,
@@ -44,12 +44,11 @@ class ChatMessages:
 
 
 class OpenAIConfig(BaseModel):
-    deployment: str
-    endpoint: str
-    api_key: str | None = None
-    api_version: str
+    model: str
+    api_key: str
+    base_url: Optional[str] = None
+    organization: Optional[str] = None
     max_parallel_requests: int = 0
-    token_provider: Any = None
     timeout: int = 60
 
 
@@ -66,22 +65,22 @@ class OpenAIClient(IPromptClient):
     @lru_cache
     def _get_client_instance(self) -> AsyncOpenAI:
         logger.info(
-            f"Using AOAI API {self._config.api_version} at {self._config.endpoint}"
+            f"Using OpenAI API with model {self._config.model}"
             + f" (max_parallel={self._config.max_parallel_requests})."
         )
-        if self._config.token_provider:
-            return AsyncAzureOpenAI(
-                azure_endpoint=self._config.endpoint,
-                azure_ad_token_provider=self._config.token_provider,
-                api_version=self._config.api_version,
-                timeout=self._config.timeout,
-            )
-        return AsyncAzureOpenAI(
-            azure_endpoint=self._config.endpoint,
-            api_key=self._config.api_key,
-            api_version=self._config.api_version,
-            timeout=self._config.timeout,
-        )
+        
+        client_options = {
+            "api_key": self._config.api_key,
+            "timeout": self._config.timeout,
+        }
+        
+        if self._config.base_url:
+            client_options["base_url"] = self._config.base_url
+            
+        if self._config.organization:
+            client_options["organization"] = self._config.organization
+            
+        return AsyncOpenAI(**client_options)
 
     @lru_cache
     def _load_prompt_file(self, prompt_file: str) -> str:
@@ -113,14 +112,14 @@ class OpenAIClient(IPromptClient):
                 break
             except (openai.RateLimitError, openai.InternalServerError) as e:
                 # Only report the first rate limit error not from a proxy unless it's constant.
-                if rate_limit_errors > 10 or (rate_limit_errors == 0 and not e.message.startswith("No good endpoints")):
+                if rate_limit_errors > 10 or rate_limit_errors == 0:
                     logger.warning(f"Rate limit error on {prompt_tag}: {e}")
                 rate_limit_errors += 1
                 await asyncio.sleep(1)
             except (openai.APIConnectionError, openai.APITimeoutError) as e:
                 if connection_errors > 2:
-                    if self._config.endpoint.startswith("http://localhost"):
-                        logger.error("Azure OpenAI API unreachable - have failed to start a local proxy?")
+                    if self._config.base_url and "localhost" in self._config.base_url:
+                        logger.error("OpenAI API unreachable - have you failed to start a local proxy?")
                     raise
                 if connection_errors == 0:
                     logger.warning(f"Connectivity error on {prompt_tag}: {e.message}")
@@ -161,7 +160,7 @@ class OpenAIClient(IPromptClient):
             "frequency_penalty": 0,
             "presence_penalty": 0,
             "temperature": 0.7,
-            "model": self._config.deployment,
+            "model": self._config.model,
             **(prompt_settings or {}),
         }
 
@@ -198,8 +197,8 @@ class OpenAIClient(IPromptClient):
                     await asyncio.sleep(1)
                 except (openai.APIConnectionError, openai.APITimeoutError):
                     if connection_errors > 2:
-                        if self._config.endpoint.startswith("http://localhost"):
-                            logger.error("Azure OpenAI API unreachable - have failed to start a local proxy?")
+                        if self._config.base_url and "localhost" in self._config.base_url:
+                            logger.error("OpenAI API unreachable - have you failed to start a local proxy?")
                         raise
                     logger.warning("Connectivity error on embeddings, retrying...")
                     connection_errors += 1
