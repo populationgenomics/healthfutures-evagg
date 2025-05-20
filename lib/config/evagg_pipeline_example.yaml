@@ -1,5 +1,5 @@
 # This is an example YAML file that configures the EvAgg pipeline to run end to end on a small number of genes/papers.
-# It does not employ CosmosDB-based caching, nor does it employ local file caching of the RareDiseaseFileLibrary and 
+# It does not employ MongoDB-based caching, nor does it employ local file caching of the RareDiseaseFileLibrary and 
 # PromptBasedContentExtractor classes. However, it does use the OpenAICacheClient for content extraction. This is
 # a simple, in-memory cache.
 
