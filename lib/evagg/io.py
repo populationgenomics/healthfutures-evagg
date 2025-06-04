@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 import os
 import sys
@@ -44,4 +45,38 @@ class TableOutputWriter(IWriteOutput):
 
         if self._path:
             output_stream.close()
+        return self._path
+
+
+class JSONOutputWriter(IWriteOutput):
+    def __init__(self, json_name: Optional[str] = None) -> None:
+        self._generated = datetime.now().astimezone()
+        self._path = os.path.join(get_run_path(), f"{json_name}.json") if json_name else None
+        if self._path and os.path.exists(self._path):
+            logger.warning(f"Overwriting existing output file: {self._path}")
+
+    def write(self, output: Sequence[Mapping[str, str]]) -> Optional[str]:
+        logger.info(f"Writing output to: {self._path or 'stdout'}")
+
+        if len(output) == 0:
+            logger.warning("No results to write")
+            return None
+
+        if self._path:
+            parent = os.path.dirname(self._path)
+            if not os.path.exists(parent):
+                os.makedirs(parent)
+
+        # Convert Mapping objects to regular dicts for JSON serialization
+        json_output = {
+            "generated": self._generated.isoformat(),
+            "data": [dict(item) for item in output]
+        }
+
+        if self._path:
+            with open(self._path, "w") as f:
+                json.dump(json_output, f, indent=2)
+        else:
+            json.dump(json_output, sys.stdout, indent=2)
+        
         return self._path
