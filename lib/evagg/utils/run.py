@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-from .git import RepoStatus
+from .git import GitError, RepoStatus
 
 
 class RunRecord(BaseModel):
@@ -36,8 +36,13 @@ DATE_FORMAT = "%Y%m%d_%H%M%S"
 logger = logging.getLogger(__name__)
 _output_root = ".out"
 
+repo = None
+try:
+    repo = RepoStatus()
+except GitError as e:
+    logger.info(f"Failed to get git status: {e}")
+
 # Initialize the current run record from the command-line arguments.
-repo = RepoStatus()
 _current_run = RunRecord(
     name=os.path.splitext(os.path.basename(sys.argv[1]))[0] if len(sys.argv) > 1 else os.path.basename(sys.argv[0]),
     args=sys.argv[1:],
@@ -46,7 +51,7 @@ _current_run = RunRecord(
         "branch": repo.branch,
         "commit": repo.commit,
         "modified_files": [f.name for f in repo.all_modified_files],
-    },
+    } if repo else {},
 )
 
 
@@ -84,9 +89,12 @@ def set_run_complete(output_file: Optional[str]) -> None:
         with open(os.path.join(_current_run.path, "run.json"), "w") as f:
             f.write(_current_run.json(indent=4))
 
-    if files := len([f for f in repo.all_modified_files if f.name.startswith("lib/")]):
-        logger.warning(f"{files} modified {'file' if files == 1 else 'files'} in 'lib'.")
-    logger.info(f"Run complete in {_current_run.elapsed_secs} secs on branch {repo.branch} ({repo.commit[:7]})")
+    if repo:
+        if files := len([f for f in repo.all_modified_files if f.name.startswith("lib/")]):
+            logger.warning(f"{files} modified {'file' if files == 1 else 'files'} in 'lib'.")
+        logger.info(f"Run complete in {_current_run.elapsed_secs} secs on branch {repo.branch} ({repo.commit[:7]})")
+    else:
+        logger.info(f"Run complete in {_current_run.elapsed_secs} secs")
 
 
 def get_previous_run(
