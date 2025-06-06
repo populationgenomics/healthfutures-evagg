@@ -1,0 +1,5 @@
+model_list:
+  - model_name: gpt-4.1
+    litellm_params:
+      model: bedrock/gpt-4.1
+      aws_region_name: ap-southeast-2
