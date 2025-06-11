@@ -1,37 +1,130 @@
-# Poetry is used on top of conda in order to install the local library.
-# All package dependencies should be managed by conda.
-[tool.poetry]
-name = "lib"
-version = "0.0.0" # This is unused.
-description = "local repo library"
-authors = ["Microsoft Biomedical Computing Group <BiomedComp@microsoft.com>"]
+[project]
+name = "evagg"
+version = "0.0.0"
+description = "Evidence Aggregator for genomics literature"
+authors = [
+    {name = "Microsoft Biomedical Computing Group", email = "BiomedComp@microsoft.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
 
-[tool.poetry.scripts]
+dependencies = [
+    # Scientific computing
+    "numpy>=2.2.0",
+    "pandas>=2.2.3",
+    "pyarrow>=18.0.0",
+    "openpyxl>=3.1.5",
+    "ipykernel>=6.29.5",
+    "jinja2>=3.1.4",
+    "ipywidgets>=8.1.5",
+    "matplotlib>=3.9.3",
+    "seaborn>=0.13.2",
+    "plotly>=5.24.1",
+    
+    # General utilities
+    "pydantic>=2.10.2",
+    "defusedxml>=0.7.1",
+    "ratelimit>=2.2.1",
+    "python-dotenv>=1.0.1",
+    "urllib3>=2.2.3",
+    "pymongo>=4.11.0",
+    
+    # AI/ML
+    "openai>=1.86.0",
+    "scikit-learn>=1.6.0",
+    
+    # Bioinformatics
+    "biopython>=1.84",
+    "hpo3>=1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Code formatting and linting
+    "ruff>=0.8.5",
+    "mypy>=1.13.0",
+    "types-requests>=2.32.0.20241016",
+    "types-pyyaml>=6.0.12.20240917",
+    
+    # Testing
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-asyncio>=0.24.0",
+    
+    # Security
+    "bandit>=1.8.3",
+]
+
+[project.scripts]
 run_evagg_app = "lib.execute:run_evagg_app"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-# Flake8 does not support configuration in this file, so it's configured in .flake8
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.8.5",
+    "mypy>=1.13.0",
+    "types-requests>=2.32.0.20241016",
+    "types-pyyaml>=6.0.12.20240917",
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-asyncio>=0.24.0",
+    "bandit>=1.8.3",
+]
 
-[tool.black]
+[tool.ruff]
 line-length = 120
+target-version = "py313"
 
-[tool.isort]
-profile = "black"
-line_length = 120
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "D",    # pydocstyle
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E203",  # Black doesn't agree with E203: whitespace before ':'
+    "D1",    # Docstrings not required (matching original flake8 config)
+    "B019",  # OK to use functools.lru_cache
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["D"]  # No docstring checks for tests
+"sandbox/*" = ["F401", "E501"]  # Allow unused imports and long lines in sandbox
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
+python_version = "3.13"
 pretty = true
 ignore_missing_imports = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 
-# Asserts are OK.
 [tool.bandit]
-skips = ['B101']
+skips = ["B101"]  # Asserts are OK
 
 [tool.coverage.run]
 omit = [
