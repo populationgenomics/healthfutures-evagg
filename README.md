@@ -33,15 +33,14 @@ The existing app/sub-object spec files for defining various runnable pipelines a
 
 The following setup steps will allow you to run a simple pipeline app at the Linux command-line that outputs (fabricated) sample results without relying on any external resources. (Each step is described in greater detail for increased pipeline functionality in [SETUP.md](SETUP.md).)
 
-1. [Install software prerequisites](SETUP.md#install-software-prerequisites): `python`, `git`, `miniconda/libmamba`
+1. [Install software prerequisites](SETUP.md#install-software-prerequisites): `python` 3.13+, `git`, `uv`
 2. [Clone this repository](SETUP.md#clone-the-repository): `git clone https://github.com/microsoft/healthfutures-evagg && cd healthfutures-evagg`
-3. [Build a conda environment](SETUP.md#build-a-conda-environment): `conda env create -f environment.yml && conda activate evagg`
-4. [Install poetry dependencies](SETUP.md#install-poetry-dependencies): `poetry install`
+3. [Install dependencies with uv](SETUP.md#install-dependencies-with-uv): `uv sync --dev`
 
 Then run the sample pipeline using the following command. It will output a few lines of placeholder publication "evidence" to standard output.
 
 ```bash
-run_evagg_app lib/config/sample_config.yaml
+uv run run_evagg_app lib/config/sample_config.yaml
 ```
 
 Proceed to [SETUP.md](SETUP.md) to set up external dependencies and perform a full-featured example execution of the pipeline against live resources.
@@ -100,4 +99,4 @@ The Evidence Aggregator uses the Human Phenotype Ontology (HPO version dependent
 
 The Evidence Aggregator team thanks the Gene Curation Coalition (GenCC) for providing curated content referenced during development. GenCC’s curated content was obtained at <http://www.thegencc.org> [July 2024] and includes contributions from the following organizations: ClinGen, Ambry Genetics, Franklin by Genoox, G2P, Genomics England PanelApp, Illumina, Invitae, King Faisal Specialist Hospital and Research Center, Laboratory for Molecular Medicine, Myriad Women’s Health, Orphanet, PanelApp Australia.
 
-Environment dependencies may be found in environment.yml.  
+Environment dependencies may be found in environment.yml.

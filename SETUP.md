@@ -6,17 +6,18 @@ Evidence Aggregator runs at the Linux command line and depends on access to mult
 
 ## Install software prerequisites
 
-- **Python** 3.12 or above
-- **miniconda** with libmamba solver
+- **Python** 3.13 or above
+- **uv** - Install via:
 
     ```bash
-    curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh > miniconda.sh
-    sh ./miniconda.sh # close and reopen shell.
-    /home/azureuser/miniconda3/bin/conda init $SHELL # if you didn't init conda for your shell during setup.
-    conda update -n base -c defaults conda -y
-    conda config --add channels conda-forge
-    conda install -n base conda-libmamba-solver -y
-    conda config --set solver libmamba
+    # On macOS and Linux
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    
+    # Or via pip
+    pip install uv
+    
+    # Or via homebrew (macOS)
+    brew install uv
     ```
 
 - **git**
@@ -32,27 +33,23 @@ git clone https://github.com/microsoft/healthfutures-evagg
 cd healthfutures-evagg
 ```
 
-## Build a conda environment
+## Install dependencies with uv
 
-Create a conda environment. All shell commands in this section should be executed from the repository's root directory.
-
-```bash
-conda env create -f environment.yml
-conda activate evagg
-```
-
-## Install poetry dependencies
-
-Use poetry to install the local library and register the pipeline run command:
+Install all dependencies and set up the project environment. All shell commands in this section should be executed from the repository's root directory.
 
 ```bash
-poetry install
+uv sync --dev
 ```
+
+This will:
+- Create a virtual environment with Python 3.13
+- Install all dependencies including development tools
+- Install the local library and register the pipeline run command
 
 Test installation by running the following. You should see a help message displayed providing usage for the `run_evagg_app` command.
 
 ```bash
-run_evagg_app -h
+uv run run_evagg_app -h
 ```
 
 ## Deploy external resources
@@ -196,7 +193,7 @@ The script `run_evagg_app` is used to execute a pipeline app. It has one require
 
 
 ```bash
-run_evagg_app lib/config/evagg_pipeline_example.yaml
+uv run run_evagg_app lib/config/evagg_pipeline_example.yaml
 ```
 
 Using gpt-4o-mini with 2000k TPM of quota allocated, this example will complete in approximately 2 minutes. Results of the run will be located in `.out/run_evagg_pipeline_example_<YYYYMMDD_HHMMSS>`, where each individual run is given a unique datestamp suffix. The primary pipeline output file is `pipeline_benchmark.tsv` contained in that folder. Additional files in the run output folder can be used to debug issues and better understand interactions between the pipeline and the LLM.
@@ -204,7 +201,7 @@ Using gpt-4o-mini with 2000k TPM of quota allocated, this example will complete 
 You can optionally add or override any leaf value within an app spec dictionary (or sub-dictionary) using the `-o` argument followed by one or more dictionary `key:value` specifications separated by spaces. The following command overrides the default log level for increased logging verbosity and outputs the run results to a file named `different.tsv` in the run output directory:
 
 ```bash
-run_evagg_app lib/config/evagg_pipeline_example.yaml -o writer.tsv_name:different log.level:DEBUG
+uv run run_evagg_app lib/config/evagg_pipeline_example.yaml -o writer.tsv_name:different log.level:DEBUG
 ```
 
 ## Modify the pipeline app example to process genes of interest

@@ -45,6 +45,7 @@ class ChatMessages:
 
 class OpenAIConfig(BaseModel):
     model: str
+    embedding_model: str
     api_key: str
     base_url: Optional[str] = None
     organization: Optional[str] = None
@@ -179,7 +180,7 @@ class OpenAIClient(IPromptClient):
     async def embeddings(
         self, inputs: List[str], embedding_settings: Optional[Dict[str, Any]] = None
     ) -> Dict[str, List[float]]:
-        settings = {"model": "text-embedding-3-small", **(embedding_settings or {})}
+        settings = {"model": self._config.embedding_model, **(embedding_settings or {})}
 
         embeddings = {}
 

@@ -1,29 +1,23 @@
-FROM continuumio/miniconda3:25.3.1-1
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Copy files from parent directory (context will be set to parent)
-COPY environment.yml .
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Set up conda environment
-RUN conda config --add channels conda-forge && \
-    conda install -n base conda-libmamba-solver && \
-    conda config --set solver libmamba && \
-    conda env update -n base -f environment.yml && \
-    conda clean -afy
-
-# Copy only the files needed for poetry installation
-COPY pyproject.toml poetry.toml ./
+# Copy project files
+COPY pyproject.toml uv.lock README.md ./
 COPY lib ./lib
 
-# Install the package with poetry and LiteLLM
-RUN poetry install --no-interaction && \
-    pip install litellm[proxy]==1.72.1 && \
-    rm -rf /root/.cache/pip
+# Install dependencies and the package, plus LiteLLM proxy
+RUN uv sync --frozen --no-dev && \
+    uv pip install "litellm[proxy]==1.72.6"
+
+ENV PATH=$PATH:/app/.venv/bin
 
 # Copy startup script
-COPY bpipe/run_with_litellm.sh /run_with_litellm.sh
-RUN chmod +x /run_with_litellm.sh
+COPY bpipe/run_with_litellm.sh ./
+RUN chmod +x ./run_with_litellm.sh
 
 # Use the startup script as entrypoint
-ENTRYPOINT ["/run_with_litellm.sh"]
+ENTRYPOINT ["./run_with_litellm.sh"]

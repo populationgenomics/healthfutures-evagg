@@ -25,7 +25,7 @@
 			],
 			"settings": {
 				"extensions.ignoreRecommendations": true,
-				"python.defaultInterpreterPath": "/opt/conda/envs/evagg/bin/python"
+				"python.defaultInterpreterPath": "/tmp/uv-tmp/.venv/bin/python"
 			}
 		}
 	}

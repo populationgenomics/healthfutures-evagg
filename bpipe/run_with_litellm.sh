@@ -16,7 +16,7 @@ fi
 # Wait for LiteLLM to be ready
 echo "Waiting for LiteLLM to start..."
 for i in {1..30}; do
-    if curl -s http://localhost:4000/health > /dev/null 2>&1; then
+    if python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')" > /dev/null 2>&1; then
         echo "LiteLLM is ready"
         break
     fi
@@ -29,4 +29,4 @@ done
 
 # Run EvAgg pipeline with LiteLLM proxy URL
 echo "Starting EvAgg pipeline..."
-OPENAI_BASE_URL="http://localhost:4000" exec /app/.venv/bin/run_evagg_app "$@"
+OPENAI_BASE_URL="http://localhost:4000" run_evagg_app "$@"
