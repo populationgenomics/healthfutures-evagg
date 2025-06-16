@@ -5,6 +5,10 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# Support for custom build steps
+COPY README* *build.d /build.d/
+RUN bash -c 'for i in $(ls /build.d/*.sh 2>/dev/null | sort) ; do source $i ; done'
+
 # Copy project files
 COPY pyproject.toml uv.lock README.md ./
 COPY lib ./lib
