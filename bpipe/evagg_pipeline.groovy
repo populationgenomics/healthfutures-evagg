@@ -37,26 +37,45 @@ run_evagg = {
   "retmax": 25
 """
         
-        // Create .env_litellm file with sensitive environment variables for LiteLLM only.
-        // Only include variables that are actually set.
-        def envFile = new File(".env_litellm")
-        def envContent = []
+        // Create LiteLLM config file with credentials
+        def litellmConfig = new File("litellm_config.yaml")
+        def configContent = "model_list:\n"
         
-        if (OPENAI_MODEL) envContent << "OPENAI_MODEL=${OPENAI_MODEL}"
-        if (OPENAI_EMBEDDING_MODEL) envContent << "OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL}"
-        if (OPENAI_API_KEY) envContent << "OPENAI_API_KEY=${OPENAI_API_KEY}"
-        if (AWS_ACCESS_KEY_ID) envContent << "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
-        if (AWS_SECRET_ACCESS_KEY) envContent << "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
-        if (AWS_DEFAULT_REGION) envContent << "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+        if (hasAWS) {
+            configContent += """\
+  - model_name: "gpt-*"
+    litellm_params:
+      model: "bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0"
+      aws_region_name: "${AWS_DEFAULT_REGION}"
+      aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
+      aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+  - model_name: "text-embedding-*"
+    litellm_params:
+      model: "bedrock/apac.amazon.titan-embed-text-v2:0"
+      aws_region_name: "${AWS_DEFAULT_REGION}"
+      aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
+      aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+"""
+        } else if (hasOpenAI) {
+            configContent += """\
+  - model_name: "gpt-*"
+    litellm_params:
+      model: "gpt-4.1"
+      api_key: "${OPENAI_API_KEY}"
+  - model_name: "text-embedding-*"
+    litellm_params:
+      model: "text-embedding-3-small"
+      api_key: "${OPENAI_API_KEY}"
+"""
+        }
         
-        envFile.text = envContent.join("\n") + "\n"
+        litellmConfig.text = configContent
         // Run the Docker container with mounted volumes.
         // .ref is for processed reference files, which can be shared between different runs.
         exec """
             docker run --rm
                 -v ${PWD}/config_mount/genes.yaml:/app/lib/config/queries/genes.yaml:ro
                 -v ${PWD}/output_mount:/app/.out
-                -v ${PWD}/.env_litellm:/app/.env_litellm
                 -v ${PWD}/litellm_config.yaml:/app/litellm_config.yaml:ro
                 -v ${PWD}/../.ref:/app/.ref
                 ${EVAGG_IMAGE}
@@ -64,7 +83,7 @@ run_evagg = {
 
             mv output_mount/evagg_results.json $output
             
-            rm -r config_mount output_mount .env_litellm
+            rm -r config_mount output_mount litellm_config.yaml
         """
     }
 }

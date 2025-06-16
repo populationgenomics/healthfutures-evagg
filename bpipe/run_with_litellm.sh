@@ -1,22 +1,24 @@
 #!/bin/bash
 set -e
 
+# Configuration
+LITELLM_PORT=4000
+
 # Always use LiteLLM
 echo "Starting LiteLLM proxy..."
 
-# Start LiteLLM with environment variables from .env_litellm
-if [ -f "/app/.env_litellm" ]; then
-    # Source the env file inline for just the litellm command
-    (set -a; source /app/.env_litellm; set +a; litellm --config /app/litellm_config.yaml --port 4000) &
+# Start LiteLLM with config file containing credentials
+if [ -f "/app/litellm_config.yaml" ]; then
+    litellm --config /app/litellm_config.yaml --port $LITELLM_PORT &
 else
-    echo "ERROR: No .env_litellm file found"
+    echo "ERROR: No litellm_config.yaml file found"
     exit 1
 fi
 
 # Wait for LiteLLM to be ready
 echo "Waiting for LiteLLM to start..."
 for i in {1..30}; do
-    if python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')" > /dev/null 2>&1; then
+    if python -c "import urllib.request; urllib.request.urlopen('http://localhost:$LITELLM_PORT/health')" > /dev/null 2>&1; then
         echo "LiteLLM is ready"
         break
     fi
@@ -29,4 +31,4 @@ done
 
 # Run EvAgg pipeline with LiteLLM proxy URL
 echo "Starting EvAgg pipeline..."
-OPENAI_BASE_URL="http://localhost:4000" run_evagg_app "$@"
+OPENAI_BASE_URL="http://localhost:$LITELLM_PORT" run_evagg_app "$@"

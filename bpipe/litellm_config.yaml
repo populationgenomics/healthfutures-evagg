@@ -1,9 +1,0 @@
-model_list:
-  - model_name: "gpt-*"
-    litellm_params:
-      model: bedrock/apac.anthropic.claude-sonnet-4-20250514-v1
-      aws_region_name: ap-southeast-2
-  - model_name: "text-embedding-*"
-    litellm_params:
-      model: bedrock/amazon.titan-embed-text-v2
-      aws_region_name: ap-southeast-2
