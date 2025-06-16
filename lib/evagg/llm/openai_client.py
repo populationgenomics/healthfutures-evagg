@@ -44,9 +44,9 @@ class ChatMessages:
 
 
 class OpenAIConfig(BaseModel):
-    model: str
-    embedding_model: str
-    api_key: str
+    model: str = "gpt-4.1"
+    embedding_model: str = "text-embedding-3-small"
+    api_key: Optional[str] = "dummy-key"
     base_url: Optional[str] = None
     organization: Optional[str] = None
     max_parallel_requests: int = 0
@@ -71,10 +71,12 @@ class OpenAIClient(IPromptClient):
         )
         
         client_options = {
-            "api_key": self._config.api_key,
             "timeout": self._config.timeout,
         }
         
+        if self._config.api_key:
+            client_options["api_key"] = self._config.api_key
+            
         if self._config.base_url:
             client_options["base_url"] = self._config.base_url
             
