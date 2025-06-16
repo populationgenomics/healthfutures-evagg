@@ -33,7 +33,7 @@ The existing app/sub-object spec files for defining various runnable pipelines a
 
 The following setup steps will allow you to run a simple pipeline app at the Linux command-line that outputs (fabricated) sample results without relying on any external resources. (Each step is described in greater detail for increased pipeline functionality in [SETUP.md](SETUP.md).)
 
-1. [Install software prerequisites](SETUP.md#install-software-prerequisites): `python` 3.13+, `git`, `uv`
+1. [Install software prerequisites](SETUP.md#install-software-prerequisites): `python` 3.12, `git`, `uv`
 2. [Clone this repository](SETUP.md#clone-the-repository): `git clone https://github.com/microsoft/healthfutures-evagg && cd healthfutures-evagg`
 3. [Install dependencies with uv](SETUP.md#install-dependencies-with-uv): `uv sync --dev`
 

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:3.13
+FROM mcr.microsoft.com/devcontainers/python:3.12
 
 ARG USERNAME="vscode"
 ENV USER_HOME=/home/${USERNAME}
@@ -20,4 +20,3 @@ RUN uv sync --dev
 # Configure the environment to start correctly.
 RUN echo 'export PATH="/tmp/uv-tmp/.venv/bin:$PATH"' >> ${USER_HOME}/.bashrc \
     && echo 'cd /workspaces/healthfutures-evagg' >> ${USER_HOME}/.bashrc
-

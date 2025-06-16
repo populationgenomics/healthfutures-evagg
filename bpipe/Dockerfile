@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -13,11 +13,11 @@ RUN bash -c 'for i in $(ls /build.d/*.sh 2>/dev/null | sort) ; do source $i ; do
 COPY pyproject.toml uv.lock README.md ./
 COPY lib ./lib
 
-# Install dependencies and the package, plus LiteLLM proxy
-RUN uv sync --frozen --no-dev && \
-    uv pip install "litellm[proxy]==1.72.6"
-
-ENV PATH=$PATH:/app/.venv/bin
+# Export dependencies to requirements.txt and install system-wide to use system certs
+RUN uv export --frozen --no-hashes --no-dev -o requirements.txt && \
+    uv pip install --system -r requirements.txt && \
+    uv pip install --system -e . && \
+    uv pip install --system "litellm[proxy]==1.72.6"
 
 # Copy startup script
 COPY bpipe/run_with_litellm.sh ./
