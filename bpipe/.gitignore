@@ -1,0 +1,4 @@
+.bpipe/
+config_mount/
+output_mount/
+.env*
