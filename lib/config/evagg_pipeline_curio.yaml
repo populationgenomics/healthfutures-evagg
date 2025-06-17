@@ -5,9 +5,11 @@ log:
   level: INFO
   to_file: true
 
-# Imported objects.
 llm_client:
-  di_factory: lib/config/objects/llm.yaml
+  di_factory: lib.evagg.llm.OpenAIClient
+  config:
+    di_factory: lib.evagg.utils.get_env_settings
+    filter_prefix: "OPENAI_"
 
 # Application.
 di_factory: lib.evagg.PaperQueryApp
@@ -25,7 +27,10 @@ extractor:
   fields:
     di_factory: lib/config/fields/evidence_all.yaml
   llm_client:
-    di_factory: lib/config/objects/llm_cache.yaml
+    di_factory: lib.evagg.llm.OpenAICacheClient
+    config:
+      di_factory: lib.evagg.utils.get_env_settings
+      filter_prefix: "OPENAI_"
   phenotype_searcher:
     di_factory: lib.evagg.ref.WebHPOClient
     web_client:

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import sys
 import time
 from functools import lru_cache, reduce
 from typing import Any, Dict, Iterable, List, Optional
@@ -51,13 +52,22 @@ class OpenAIConfig(BaseModel):
     organization: Optional[str] = None
     max_parallel_requests: int = 0
     timeout: int = 60
+    budget_usd: Optional[float] = None  # Optional budget limit in USD
 
 
 class OpenAIClient(IPromptClient):
     _config: OpenAIConfig
+    _total_cost: float = 0.0  # Track cumulative cost across all requests
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self._config = OpenAIConfig(**config)
+        self._total_cost = 0.0
+        
+        # Log budget configuration at initialization
+        if self._config.budget_usd is not None:
+            logger.info(f"Cost tracking enabled with budget: ${self._config.budget_usd:.4f}")
+        else:
+            logger.info("Cost tracking disabled (no budget_usd configured)")
 
     @property
     def _client(self) -> AsyncOpenAI:
@@ -92,8 +102,54 @@ class OpenAIClient(IPromptClient):
 
     def _create_completion_task(self, messages: ChatMessages, settings: Dict[str, Any]) -> asyncio.Task:
         """Schedule a completion task to the event loop and return the awaitable."""
-        chat_completion = self._client.chat.completions.create(messages=messages.to_list(), **settings)
+        # Always use with_raw_response to get access to headers
+        chat_completion = self._client.chat.completions.with_raw_response.create(
+            messages=messages.to_list(), **settings
+        )
         return asyncio.create_task(chat_completion, name="chat")
+    
+    def _track_cost_and_check_budget(self, headers: Dict[str, str]) -> None:
+        """Extract cost from response headers and check budget if cost tracking is enabled.
+        
+        Args:
+            headers: The response headers dictionary
+        """
+        logger.debug(f"Budget tracking called - budget_usd: {self._config.budget_usd}")
+        logger.debug(f"Response headers: {dict(headers)}")
+        
+        if self._config.budget_usd is None:
+            logger.debug("Skipping cost tracking - no budget configured")
+            return
+            
+        logger.debug("Cost tracking is enabled, checking for cost header")
+        
+        # Currently only support x-litellm-response-cost header
+        cost_header = headers.get('x-litellm-response-cost')
+        
+        if not cost_header:
+            logger.error(f"Cost tracking enabled but x-litellm-response-cost header missing. Available headers: {list(headers.keys())}")
+            raise RuntimeError(
+                "Cost tracking is enabled but no x-litellm-response-cost header found in response"
+            )
+        
+        logger.debug(f"Found cost header: {cost_header}")
+        
+        # Convert string to float, handling potential formatting issues
+        try:
+            cost = float(cost_header)
+        except ValueError:
+            raise ValueError(f"Invalid cost header value: {cost_header}")
+            
+        self._total_cost += cost
+        logger.info(f"Request cost: ${cost:.4f}, Total cost: ${self._total_cost:.4f}")
+        
+        # Check if budget is exceeded
+        if self._total_cost > self._config.budget_usd:
+            logger.error(
+                f"Budget exceeded! Total cost: ${self._total_cost:.4f} > "
+                f"Budget: ${self._config.budget_usd:.4f}"
+            )
+            sys.exit(1)
 
     async def _generate_completion(self, messages: ChatMessages, settings: Dict[str, Any]) -> str:
         prompt_tag = settings.pop("prompt_tag", "prompt")
@@ -109,9 +165,16 @@ class OpenAIClient(IPromptClient):
                         await asyncio.sleep(1)
 
                 start_ts = time.time()
-                completion = await self._create_completion_task(messages, settings)
+                raw_response = await self._create_completion_task(messages, settings)
+                
+                # Extract the actual response and headers
+                completion = raw_response.parse()
                 response = completion.choices[0].message.content or ""
                 elapsed = time.time() - start_ts
+                
+                # Track cost if budget is enabled (not for error responses)
+                self._track_cost_and_check_budget(dict(raw_response.headers))
+                
                 break
             except (openai.RateLimitError, openai.InternalServerError) as e:
                 # Only report the first rate limit error not from a proxy unless it's constant.
@@ -188,10 +251,16 @@ class OpenAIClient(IPromptClient):
             connection_errors = 0
             while True:
                 try:
-                    result: CreateEmbeddingResponse = await self._client.embeddings.create(
+                    # Always use with_raw_response to get access to headers
+                    raw_response = await self._client.embeddings.with_raw_response.create(
                         input=[input], encoding_format="float", **settings
                     )
+                    result: CreateEmbeddingResponse = raw_response.parse()
                     embeddings[input] = result.data[0].embedding
+                    
+                    # Track cost if budget is enabled
+                    self._track_cost_and_check_budget(dict(raw_response.headers))
+                    
                     return result.usage.prompt_tokens
                 except (openai.RateLimitError, openai.InternalServerError) as e:
                     logger.warning(f"Rate limit error on embeddings: {e}")

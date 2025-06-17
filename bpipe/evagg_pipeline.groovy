@@ -3,8 +3,7 @@
 
 // Configuration
 EVAGG_IMAGE = "evagg" // Default Docker image tag
-OPENAI_MODEL = "gpt-4.1" // This gets remapped by LiteLLM
-OPENAI_EMBEDDING_MODEL = "text-embedding-3-small" // This gets remapped by LiteLLM
+OPENAI_BUDGET_USD = 20.0 // Budget limit in USD
 
 // Check for either OpenAI or AWS credentials
 OPENAI_API_KEY = System.getenv("OPENAI_API_KEY")
@@ -49,22 +48,12 @@ run_evagg = {
       aws_region_name: "${AWS_DEFAULT_REGION}"
       aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
       aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
-  - model_name: "text-embedding-*"
-    litellm_params:
-      model: "bedrock/apac.amazon.titan-embed-text-v2:0"
-      aws_region_name: "${AWS_DEFAULT_REGION}"
-      aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
-      aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
 """
         } else if (hasOpenAI) {
             configContent += """\
   - model_name: "gpt-*"
     litellm_params:
       model: "gpt-4.1"
-      api_key: "${OPENAI_API_KEY}"
-  - model_name: "text-embedding-*"
-    litellm_params:
-      model: "text-embedding-3-small"
       api_key: "${OPENAI_API_KEY}"
 """
         }
@@ -78,6 +67,7 @@ run_evagg = {
                 -v ${PWD}/output_mount:/app/.out
                 -v ${PWD}/litellm_config.yaml:/app/litellm_config.yaml:ro
                 -v ${PWD}/../.ref:/app/.ref
+                -e OPENAI_BUDGET_USD=${OPENAI_BUDGET_USD}
                 ${EVAGG_IMAGE}
                 lib/config/evagg_pipeline_curio.yaml
 
