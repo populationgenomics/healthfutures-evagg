@@ -46,4 +46,4 @@ extractor:
       di_factory: lib.evagg.content.HGVSVariantComparator
 writer:
   di_factory: lib.evagg.JSONOutputWriter
-  json_name: evagg_results
+  json_name: /app/.out/evagg_results.json
