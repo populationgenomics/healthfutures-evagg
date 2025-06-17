@@ -13,10 +13,22 @@ from .interfaces import IWriteOutput
 logger = logging.getLogger(__name__)
 
 
+def _get_output_path(name: Optional[str], extension: str) -> Optional[str]:
+    """Helper to get output path, handling both absolute and relative paths."""
+    if not name:
+        return None
+    
+    filename = name if name.endswith(f'.{extension}') else f"{name}.{extension}"
+    if os.path.isabs(name):
+        return filename
+    else:
+        return os.path.join(get_run_path(), filename)
+
+
 class TableOutputWriter(IWriteOutput):
     def __init__(self, tsv_name: Optional[str] = None) -> None:
         self._generated = datetime.now().astimezone()
-        self._path = os.path.join(get_run_path(), f"{tsv_name}.tsv") if tsv_name else None
+        self._path = _get_output_path(tsv_name, 'tsv')
         if self._path and os.path.exists(self._path):
             logger.warning(f"Overwriting existing output file: {self._path}")
 
@@ -51,7 +63,7 @@ class TableOutputWriter(IWriteOutput):
 class JSONOutputWriter(IWriteOutput):
     def __init__(self, json_name: Optional[str] = None) -> None:
         self._generated = datetime.now().astimezone()
-        self._path = os.path.join(get_run_path(), f"{json_name}.json") if json_name else None
+        self._path = _get_output_path(json_name, 'json')
         if self._path and os.path.exists(self._path):
             logger.warning(f"Overwriting existing output file: {self._path}")
 
