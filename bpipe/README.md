@@ -27,7 +27,7 @@ export OPENAI_API_KEY="your-api-key"
 ```bash
 export AWS_ACCESS_KEY_ID="your-access-key"
 export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_REGION_NAME="us-east-1"
+export AWS_DEFAULT_REGION="us-east-1"
 ```
 
 If you have profiles / credentials set up in `~/.aws`, you can set `$AWS_PROFILE` and run:
@@ -46,5 +46,5 @@ bpipe run evagg_pipeline.groovy -gene_symbol BRCA1
 
 The pipeline automatically selects models based on available credentials:
 
-- **OpenAI** (if `OPENAI_API_KEY` is set): `gpt-4.1` and `text-embedding-3-small`
-- **AWS Bedrock** (if AWS credentials are set): `bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0` and `bedrock/amazon.titan-embed-text-v2:0`
+- **OpenAI** (if `OPENAI_API_KEY` is set): `gpt-4.1`
+- **AWS Bedrock** (if AWS credentials are set): `bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0`
