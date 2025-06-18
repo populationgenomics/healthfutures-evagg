@@ -21,12 +21,13 @@ if (!hasOpenAI && !hasAWS) {
 
 options {
     gene_symbol 'Gene symbol to find evidence for', args: 1, required: true
+    output_filename 'Output filename, can be used to force a rerun by using unique outputs', args: 1, required: true
 }
     
 run_evagg = {
     doc "Run EVAGG for a single gene symbol"
     
-    produce("evagg_results.json") {
+    produce(opts.output_filename) {
         new File("config_mount").mkdirs()
         new File("output_mount").mkdirs()
         
