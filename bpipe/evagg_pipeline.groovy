@@ -45,7 +45,7 @@ run_evagg = {
             configContent += """\
   - model_name: "gpt-*"
     litellm_params:
-      model: "bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0"
+      model: "bedrock/converse/apac.anthropic.claude-sonnet-4-20250514-v1:0"
       aws_region_name: "${AWS_DEFAULT_REGION}"
       aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
       aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"

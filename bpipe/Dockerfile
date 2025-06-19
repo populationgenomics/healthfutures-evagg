@@ -17,7 +17,12 @@ COPY lib ./lib
 RUN uv export --frozen --no-hashes --no-dev -o requirements.txt && \
     uv pip install --system -r requirements.txt && \
     uv pip install --system -e . && \
-    uv pip install --system "litellm[proxy]==1.72.6"
+    # Use custom LiteLLM proxy with updated model config for APAC until
+    # https://github.com/BerriAI/litellm/pull/11883 gets merged.
+    # Once going back to the original, remove LITELLM_LOCAL_MODEL_COST_MAP="True"
+    # from run_with_litellm.sh.
+    #uv pip install --system "litellm[proxy]==1.72.6"
+    uv pip install --system "https://github.com/lgruen-vcgs/litellm/archive/feat-aws-bedrock-apac.zip[proxy]"
 
 # Copy startup script
 COPY bpipe/run_with_litellm.sh ./

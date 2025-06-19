@@ -9,7 +9,8 @@ echo "Starting LiteLLM proxy..."
 
 # Start LiteLLM with config file containing credentials
 if [ -f "/app/litellm_config.yaml" ]; then
-    litellm --config /app/litellm_config.yaml --port $LITELLM_PORT &
+    # See Dockerfile regarding LITELLM_LOCAL_MODEL_COST_MAP="True".
+    LITELLM_LOCAL_MODEL_COST_MAP="True" litellm --config /app/litellm_config.yaml --port $LITELLM_PORT &
 else
     echo "ERROR: No litellm_config.yaml file found"
     exit 1
