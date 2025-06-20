@@ -8,7 +8,7 @@ class Example:
     text: str
 
 
-POSITIVE_EXAMPLES_INTRO = "Below are several few shot examples of papers that are classified as 'rare disease'. These are in no particular order:\n"
+POSITIVE_EXAMPLES_INTRO = "Below are several few shot examples of papers that are classified as 'genetic disease'. These are in no particular order:\n"
 # Each pair of examples is a positive example followed by a backup positive example of a different gene.
 POSITIVE_EXAMPLES: List[Tuple[Example, Example]] = [
     (

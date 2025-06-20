@@ -1,7 +1,5 @@
 Determine zygosity for patient {{$patient_descriptions}} with variant {{$variant_descriptions}} in gene {{$gene}}.
 
-CRITICAL: Respond with ONLY valid JSON. No explanatory text.
-
 Zygosity guidance:
 - Inheritance patterns help infer zygosity: de novo/autosomal dominant → usually heterozygous, autosomal recessive → usually homozygous
 - Compound heterozygous: patient has two different variants in same gene
@@ -10,5 +8,3 @@ Zygosity guidance:
 Options: "homozygous", "heterozygous", "compound heterozygous", "none"
 
 Evidence: {{$passage}}
-
-Format: {"zygosity": "your_choice"}

@@ -1,7 +1,5 @@
 Classify variant type for {{$variant_descriptions}} in gene {{$gene}}.
 
-CRITICAL: Respond with ONLY valid JSON. No explanatory text.
-
 Classification examples:
 - Single base substitutions (c.274G>T): Check protein consequence. p.Asp92Tyr = missense, p.Asp92= = synonymous, p.Asp92*/Ter/X = stop gained
 - Frameshift variants: Include "fs" in protein description. c.274_275del → p.Asp92Leufs*21 = frameshift deletion
@@ -12,5 +10,3 @@ Classification examples:
 Valid types: "missense", "frameshift", "stop gained", "splice donor", "splice acceptor", "splice region", "start lost", "inframe deletion", "frameshift deletion", "inframe insertion", "frameshift insertion", "structural", "synonymous", "intron", "5' UTR", "3' UTR", "non-coding", "unknown"
 
 Evidence: {{$passage}}
-
-Format: {"variant_type": "your_choice"}

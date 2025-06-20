@@ -1,7 +1,5 @@
 Categorize this paper as "genetic disease" or "other".
 
-CRITICAL: Respond with ONLY "genetic disease" or "other". No explanatory text.
-
 Classification criteria:
 - "genetic disease": Papers discussing inherited/rare diseases with terms like "rare disease", "mendelian", "monogenic", "inherited", "germline mutations", "pathogenic variants", "benign", "de novo", "autosomal dominant/recessive", "compound heterozygous", "zygosity", ACMG guidelines, or known genetic diseases
 - "other": All papers that don't meet genetic disease criteria

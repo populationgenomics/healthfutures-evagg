@@ -16,17 +16,7 @@ COPY lib ./lib
 # Export dependencies to requirements.txt and install system-wide to use system certs
 RUN uv export --frozen --no-hashes --no-dev -o requirements.txt && \
     uv pip install --system -r requirements.txt && \
-    uv pip install --system -e . && \
-    # Use custom LiteLLM proxy with updated model config for APAC until
-    # https://github.com/BerriAI/litellm/pull/11883 gets merged.
-    # Once going back to the original, remove LITELLM_LOCAL_MODEL_COST_MAP="True"
-    # from run_with_litellm.sh.
-    #uv pip install --system "litellm[proxy]==1.72.6"
-    uv pip install --system "https://github.com/lgruen-vcgs/litellm/archive/feat-aws-bedrock-apac.zip[proxy]"
+    uv pip install --system -e .
 
-# Copy startup script
-COPY bpipe/run_with_litellm.sh ./
-RUN chmod +x ./run_with_litellm.sh
-
-# Use the startup script as entrypoint
-ENTRYPOINT ["./run_with_litellm.sh"]
+# Use run_evagg_app directly as entrypoint
+ENTRYPOINT ["run_evagg_app"]

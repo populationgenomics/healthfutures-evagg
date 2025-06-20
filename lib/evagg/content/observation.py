@@ -4,9 +4,15 @@ import logging
 import os
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+from pydantic import BaseModel
 
 from lib.evagg.llm import IPromptClient
+from lib.evagg.llm.models import (
+    SanityCheckResponse, FindPatientsResponse, FindVariantsResponse,
+    GenomeBuildResponse, CheckPatientsResponse, CheckVariantResponse,
+    LinkEntitiesResponse, SplitPatientsResponse, SplitVariantsResponse
+)
 from lib.evagg.types import HGVSVariant, ICreateVariants, Paper
 
 from .fulltext import get_fulltext, get_sections
@@ -44,44 +50,45 @@ uninterrupted sequences of whitespace characters.
         self._variant_factory = variant_factory
         self._variant_comparator = variant_comparator
 
-    async def _run_json_prompt(
-        self, prompt_filepath: str, params: Dict[str, str], prompt_settings: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _run_structured_prompt(
+        self, prompt_filepath: str, response_model, params: Dict[str, str], prompt_settings: Dict[str, Any]
+    ) -> Optional[BaseModel]:
+        """Run a structured prompt using the LLM client.
+        
+        Returns:
+            An instance of the response_model with extracted data, or None if LLM 
+            extraction fails due to unparseable responses or validation errors after
+            all retries are exhausted. Callers must handle None gracefully.
+        """
         default_settings = {
             "max_tokens": 2048,
             "prompt_tag": "observation",
             "temperature": 0.7,
             "top_p": 0.95,
-            "response_format": {"type": "json_object"},
         }
         prompt_settings = {**default_settings, **prompt_settings}
 
-        response = await self._llm_client.prompt_file(
+        response = await self._llm_client.prompt_file_structured(
             user_prompt_file=prompt_filepath,
+            response_model=response_model,
             system_prompt=self._SYSTEM_PROMPT,
             params=params,
             prompt_settings=prompt_settings,
         )
-
-        try:
-            result = json.loads(response)
-        except json.decoder.JSONDecodeError:
-            logger.error(f"Failed to parse response from LLM to {prompt_filepath}: {response}")
-            return {}
-
-        return result
+        return response
 
     async def _check_patients(self, patient_candidates: Sequence[str], texts_to_check: Sequence[str]) -> List[str]:
         checked_patients: List[str] = []
 
         async def check_patient(patient: str) -> None:
             for text in texts_to_check:
-                validation_response = await self._run_json_prompt(
+                validation_response = await self._run_structured_prompt(
                     prompt_filepath=_get_prompt_file_path("check_patients"),
+                    response_model=CheckPatientsResponse,
                     params={"text": text, "patient": patient},
                     prompt_settings={"prompt_tag": "observation__check_patients"},
                 )
-                if validation_response.get("is_patient", False) is True:
+                if validation_response is not None and validation_response.is_patient is True:
                     checked_patients.append(patient)
                     break
             if patient not in checked_patients:
@@ -94,24 +101,30 @@ uninterrupted sequences of whitespace characters.
         self, full_text: str, focus_texts: Sequence[str] | None, metadata: Dict[str, str]
     ) -> Sequence[str]:
         """Identify the individuals (human subjects) described in the full text of the paper."""
-        full_text_response = await self._run_json_prompt(
+        full_text_response = await self._run_structured_prompt(
             prompt_filepath=_get_prompt_file_path("find_patients"),
+            response_model=FindPatientsResponse,
             params={"text": full_text},
             prompt_settings={"prompt_tag": "observation__find_patients", "prompt_metadata": metadata},
         )
 
-        unique_patients = set(full_text_response.get("patients", []))
+        if full_text_response is None:
+            return []
+        
+        unique_patients = set(full_text_response.patients)
 
         # TODO, logically deduplicate patients here, e.g., if a patient is referred to as both "proband" and "IV-1",
         # we should ask the LLM to determine if these are the same individual.
 
         async def check_focus_text(focus_text: str) -> None:
-            focus_response = await self._run_json_prompt(
+            focus_response = await self._run_structured_prompt(
                 prompt_filepath=_get_prompt_file_path("find_patients"),
+                response_model=FindPatientsResponse,
                 params={"text": focus_text},
                 prompt_settings={"prompt_tag": "observation__find_patients", "prompt_metadata": metadata},
             )
-            unique_patients.update(focus_response.get("patients", []))
+            if focus_response is not None:
+                unique_patients.update(focus_response.patients)
 
         if focus_texts:
             await asyncio.gather(*[check_focus_text(focus_text) for focus_text in focus_texts])
@@ -125,12 +138,17 @@ uninterrupted sequences of whitespace characters.
 
         async def split_patient(patient: str) -> None:
             if any(term in patient for term in [" and ", " or "]):
-                split_response = await self._run_json_prompt(
+                split_response = await self._run_structured_prompt(
                     prompt_filepath=_get_prompt_file_path("split_patients"),
+                    response_model=SplitPatientsResponse,
                     params={"patient_list": f'"{patient}"'},  # Encase in double-quotes in prep for bulk calling.
                     prompt_settings={"prompt_tag": "observation__split_patients", "prompt_metadata": metadata},
                 )
-                patients_after_splitting.extend(split_response.get("patients", []))
+                if split_response is not None:
+                    patients_after_splitting.extend(split_response.patients)
+                else:
+                    # If splitting fails, keep the original patient string
+                    patients_after_splitting.append(patient)
             else:
                 patients_after_splitting.append(patient)
 
@@ -173,8 +191,9 @@ uninterrupted sequences of whitespace characters.
         """
         # Create prompts to find all the unique variants mentioned in the full text and focus texts.
         prompt_runs = [
-            self._run_json_prompt(
+            self._run_structured_prompt(
                 prompt_filepath=_get_prompt_file_path("find_variants"),
+                response_model=FindVariantsResponse,
                 params={"text": text, "gene_symbol": gene_symbol},
                 prompt_settings={"prompt_tag": "observation__find_variants", "prompt_metadata": metadata},
             )
@@ -183,6 +202,9 @@ uninterrupted sequences of whitespace characters.
 
         # Run prompts in parallel.
         responses = await asyncio.gather(*prompt_runs)
+        
+        # Filter out None responses (failed extractions)
+        valid_responses = [r for r in responses if r is not None]
 
         # Often, the gene-symbol is provided as a prefix to the variant, remove it.
         # Note: we do additional similar checks later, but it's useful to do it now to reduce redundancy.
@@ -192,7 +214,7 @@ uninterrupted sequences of whitespace characters.
                 return x[len(gene_symbol) :].lstrip(":")
             return x
 
-        candidates = list({_strip_gene_symbol(v) for r in responses for v in r.get("variants", []) if v != "unknown"})
+        candidates = list({_strip_gene_symbol(v) for r in valid_responses for v in r.variants if v != "unknown"})
 
         # Seems like this should be unnecessary, but remove the example variants from the list of candidates.
         example_variant_subs = [
@@ -223,8 +245,9 @@ uninterrupted sequences of whitespace characters.
         for i in reversed(range(len(candidates))):
             if "p." in candidates[i] and "c." in candidates[i]:
                 split_prompt_runs.append(
-                    self._run_json_prompt(
+                    self._run_structured_prompt(
                         prompt_filepath=_get_prompt_file_path("split_variants"),
+                        response_model=SplitVariantsResponse,
                         params={"variant_list": f'"{candidates[i]}"'},  # Encase in double-quotes for bulk calling.
                         prompt_settings={"prompt_tag": "observation__split_variants", "prompt_metadata": metadata},
                     )
@@ -232,20 +255,22 @@ uninterrupted sequences of whitespace characters.
                 del candidates[i]
         # Run split prompts in parallel.
         split_responses = await asyncio.gather(*split_prompt_runs)
-        # Add the split variants back in to the candidates list.
-        candidates.extend(v for r in split_responses for v in r.get("variants", []))
+        # Add the split variants back in to the candidates list, filtering out None responses
+        valid_split_responses = [r for r in split_responses if r is not None]
+        candidates.extend(v for r in valid_split_responses for v in r.variants)
 
         return candidates
 
     async def _find_genome_build(self, full_text: str, metadata: Dict[str, str]) -> str | None:
         """Identify the genome build used in the paper."""
-        response = await self._run_json_prompt(
+        response = await self._run_structured_prompt(
             prompt_filepath=_get_prompt_file_path("find_genome_build"),
+            response_model=GenomeBuildResponse,
             params={"text": full_text},
             prompt_settings={"prompt_tag": "observation__find_genome_build", "prompt_metadata": metadata},
         )
 
-        return response.get("genome_build", "unknown")
+        return response.genome_build if response is not None else None
 
     async def _link_entities(
         self, full_text: str, patients: Sequence[str], variants: Sequence[str], metadata: Dict[str, str]
@@ -256,13 +281,19 @@ uninterrupted sequences of whitespace characters.
             "variants": ", ".join(variants),
             "gene_symbol": metadata["gene_symbol"],
         }
-        response = await self._run_json_prompt(
+        response = await self._run_structured_prompt(
             prompt_filepath=_get_prompt_file_path("link_entities"),
+            response_model=LinkEntitiesResponse,
             params=params,
             prompt_settings={"prompt_tag": "observation__link_entities", "prompt_metadata": metadata},
         )
 
-        return response
+        # Convert the structured response to dict format expected by callers
+        if response is not None:
+            return response.model_dump()
+        else:
+            # Return empty dict if extraction fails
+            return {}
 
     def _get_fulltext_sections(self, paper: Paper) -> Tuple[str, List[str]]:
         # Get paper texts.
@@ -408,8 +439,9 @@ uninterrupted sequences of whitespace characters.
 
     async def _sanity_check_paper(self, full_text: str, gene_symbol: str, metadata: Dict[str, str]) -> bool:
         try:
-            result = await self._run_json_prompt(
+            result = await self._run_structured_prompt(
                 prompt_filepath=_get_prompt_file_path("sanity_check"),
+                response_model=SanityCheckResponse,
                 params={"text": full_text, "gene": gene_symbol},
                 prompt_settings={
                     "prompt_tag": "observation__sanity_check",
@@ -430,7 +462,7 @@ uninterrupted sequences of whitespace characters.
                 logger.warning(f"Context length exceeded for {metadata['paper_id']}. Skipping.")
                 return False
             raise e
-        return result.get("relevant", True)  # Default to including the paper.
+        return result.relevant if result is not None else True  # Default to including the paper.
 
     async def find_observations(self, gene_symbol: str, paper: Paper) -> Sequence[Observation]:
         """Identify all observations relevant to `gene_symbol` in `paper`.
@@ -482,8 +514,9 @@ Note that this variant failed validation when considered as part of the gene of 
 variant isn't actually associated with the gene. But the possibility of previous error exists, so please check again.
 """
             if mentioning_text:
-                response = await self._run_json_prompt(
+                response = await self._run_structured_prompt(
                     prompt_filepath=_get_prompt_file_path("check_variant"),
+                    response_model=CheckVariantResponse,
                     params={
                         "variant_descriptions": ", ".join(descriptions),
                         "gene_symbol": gene_symbol,
@@ -495,7 +528,7 @@ variant isn't actually associated with the gene. But the possibility of previous
                         "prompt_metadata": metadata,
                     },
                 )
-                if response.get("related", False) is False:
+                if response is not None and response.related is False:
                     for description in descriptions:
                         logger.info(f"Removing {description} from the list of variants.")
                         variants_by_description.pop(description)

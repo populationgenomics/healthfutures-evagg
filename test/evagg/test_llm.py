@@ -1,7 +1,7 @@
 from functools import reduce
 from unittest.mock import AsyncMock, MagicMock, call, mock_open, patch
 
-from lib.evagg.llm import OpenAIClient
+from lib.evagg.llm import LiteLLMClient
 
 
 @patch("lib.evagg.llm.aoai.AsyncAzureOpenAI", return_value=AsyncMock())

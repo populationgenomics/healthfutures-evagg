@@ -6,6 +6,12 @@ import re
 from typing import Any, Dict, List, Sequence, Tuple
 
 from lib.evagg.llm import IPromptClient
+from lib.evagg.llm.models import (
+    VariantTypeResponse, ZygosityResponse, VariantInheritanceResponse, 
+    StudyTypeResponse, FunctionalStudyResponse, PhenotypesResponse,
+    PhenotypeCandidatesResponse, PhenotypeSimplifyResponse, 
+    PhenotypeObservationResponse, PhenotypeAcronymsResponse
+)
 from lib.evagg.ref import IFetchHPO, ISearchHPO
 from lib.evagg.types import Paper
 
@@ -21,14 +27,14 @@ def _get_prompt_file_path(name: str) -> str:
 
 class PromptBasedContentExtractor(IExtractFields):
     _PROMPT_FIELDS = {
-        "phenotype": _get_prompt_file_path("phenotypes_all"),
-        "zygosity": _get_prompt_file_path("zygosity"),
-        "variant_inheritance": _get_prompt_file_path("variant_inheritance"),
-        "variant_type": _get_prompt_file_path("variant_type"),
-        "engineered_cells": _get_prompt_file_path("functional_study"),
-        "patient_cells_tissues": _get_prompt_file_path("functional_study"),
-        "animal_model": _get_prompt_file_path("functional_study"),
-        "study_type": _get_prompt_file_path("study_type"),
+        "phenotype": (_get_prompt_file_path("phenotypes_all"), PhenotypesResponse),
+        "zygosity": (_get_prompt_file_path("zygosity"), ZygosityResponse),
+        "variant_inheritance": (_get_prompt_file_path("variant_inheritance"), VariantInheritanceResponse),
+        "variant_type": (_get_prompt_file_path("variant_type"), VariantTypeResponse),
+        "engineered_cells": (_get_prompt_file_path("functional_study"), FunctionalStudyResponse),
+        "patient_cells_tissues": (_get_prompt_file_path("functional_study"), FunctionalStudyResponse),
+        "animal_model": (_get_prompt_file_path("functional_study"), FunctionalStudyResponse),
+        "study_type": (_get_prompt_file_path("study_type"), StudyTypeResponse),
     }
     # These are the expensive prompt fields we should cache per paper.
     _CACHE_VARIANT_FIELDS = ["variant_type", "functional_study"]
@@ -43,7 +49,6 @@ class PromptBasedContentExtractor(IExtractFields):
         "prompt_tag": "observation",
         "temperature": 0.7,
         "top_p": 0.95,
-        "response_format": {"type": "json_object"},
     }
 
     def __init__(
@@ -106,26 +111,6 @@ class PromptBasedContentExtractor(IExtractFields):
             raise ValueError(f"Unsupported field: {field}")
         return field, value
 
-    async def _run_json_prompt(
-        self, prompt_filepath: str, params: Dict[str, str], prompt_settings: Dict[str, Any]
-    ) -> Dict[str, Any]:
-
-        prompt_settings = {**self._instance_prompt_settings, **prompt_settings}
-
-        response = await self._llm_client.prompt_file(
-            user_prompt_file=prompt_filepath,
-            system_prompt=self._SYSTEM_PROMPT,
-            params=params,
-            prompt_settings=prompt_settings,
-        )
-
-        try:
-            result = json.loads(response)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse response from LLM to {prompt_filepath}: {response}")
-            return {}
-
-        return result
 
     async def _convert_phenotype_to_hpo(self, phenotype: List[str]) -> List[str]:
         """Convert a list of unstructured phenotype descriptions to HPO/OMIM terms."""
@@ -155,12 +140,16 @@ class PromptBasedContentExtractor(IExtractFields):
                 candidates.add(candidate)
 
             if candidates:
-                response = await self._run_json_prompt(
-                    _get_prompt_file_path("phenotypes_candidates"),
+                response = await self._llm_client.prompt_file_structured(
+                    user_prompt_file=_get_prompt_file_path("phenotypes_candidates"),
+                    response_model=PhenotypeCandidatesResponse,
+                    system_prompt=self._SYSTEM_PROMPT,
                     params={"term": term, "candidates": "\n".join(candidates)},
-                    prompt_settings={"prompt_tag": "phenotypes_candidates"},
+                    prompt_settings={**self._instance_prompt_settings, "prompt_tag": "phenotypes_candidates"},
                 )
-                return response.get("match")
+                if response is None:
+                    return None
+                return response.match
 
             return None
 
@@ -174,13 +163,18 @@ class PromptBasedContentExtractor(IExtractFields):
 
         # Before we give up, try again with a simplified version of the term.
         for term in phenotype.copy():
-            response = await self._run_json_prompt(
-                _get_prompt_file_path("phenotypes_simplify"),
+            response = await self._llm_client.prompt_file_structured(
+                user_prompt_file=_get_prompt_file_path("phenotypes_simplify"),
+                response_model=PhenotypeSimplifyResponse,
+                system_prompt=self._SYSTEM_PROMPT,
                 params={"term": term},
-                prompt_settings={"prompt_tag": "phenotypes_simplify"},
+                prompt_settings={**self._instance_prompt_settings, "prompt_tag": "phenotypes_simplify"},
             )
+            
+            if response is None:
+                continue
 
-            if simplified := response.get("simplified"):
+            if simplified := response.simplified:
                 match = await _get_match_for_term(simplified)
                 if match:
                     match_dict[f"{term} (S)"] = match
@@ -198,12 +192,15 @@ class PromptBasedContentExtractor(IExtractFields):
     async def _observation_phenotypes_for_text(
         self, text: str, description: str, metadata: Dict[str, str]
     ) -> List[str]:
-        all_phenotypes_result = await self._run_json_prompt(
-            self._PROMPT_FIELDS["phenotype"],
-            {"passage": text},
-            {"prompt_tag": "phenotypes_all", "max_tokens": 4096, "prompt_metadata": metadata},
+        prompt_file, response_model = self._PROMPT_FIELDS["phenotype"]
+        all_phenotypes_result = await self._llm_client.prompt_file_structured(
+            user_prompt_file=prompt_file,
+            response_model=response_model,
+            system_prompt=self._SYSTEM_PROMPT,
+            params={"passage": text},
+            prompt_settings={**self._instance_prompt_settings, "prompt_tag": "phenotypes_all", "max_tokens": 4096, "prompt_metadata": metadata},
         )
-        if (all_phenotypes := all_phenotypes_result.get("phenotypes", [])) == []:
+        if all_phenotypes_result is None or (all_phenotypes := all_phenotypes_result.phenotypes) == []:
             return []
 
         # Potentially consider linked observations like comp-hets?
@@ -213,21 +210,27 @@ class PromptBasedContentExtractor(IExtractFields):
             "observation": description,
             "candidates": ", ".join(all_phenotypes),
         }
-        observation_phenotypes_result = await self._run_json_prompt(
-            _get_prompt_file_path("phenotypes_observation"),
-            observation_phenotypes_params,
-            {"prompt_tag": "phenotypes_observation", "prompt_metadata": metadata},
+        observation_phenotypes_result = await self._llm_client.prompt_file_structured(
+            user_prompt_file=_get_prompt_file_path("phenotypes_observation"),
+            response_model=PhenotypeObservationResponse,
+            system_prompt=self._SYSTEM_PROMPT,
+            params=observation_phenotypes_params,
+            prompt_settings={**self._instance_prompt_settings, "prompt_tag": "phenotypes_observation", "prompt_metadata": metadata},
         )
-        if (observation_phenotypes := observation_phenotypes_result.get("phenotypes", [])) == []:
+        if observation_phenotypes_result is None or (observation_phenotypes := observation_phenotypes_result.phenotypes) == []:
             return []
 
-        observation_acronymns_result = await self._run_json_prompt(
-            _get_prompt_file_path("phenotypes_acronyms"),
-            {"passage": text, "phenotypes": ", ".join(observation_phenotypes)},
-            {"prompt_tag": "phenotypes_acronyms", "prompt_metadata": metadata},
+        observation_acronymns_result = await self._llm_client.prompt_file_structured(
+            user_prompt_file=_get_prompt_file_path("phenotypes_acronyms"),
+            response_model=PhenotypeAcronymsResponse,
+            system_prompt=self._SYSTEM_PROMPT,
+            params={"passage": text, "phenotypes": ", ".join(observation_phenotypes)},
+            prompt_settings={**self._instance_prompt_settings, "prompt_tag": "phenotypes_acronyms", "prompt_metadata": metadata},
         )
 
-        return observation_acronymns_result.get("phenotypes", [])
+        if observation_acronymns_result is None:
+            return []
+        return observation_acronymns_result.phenotypes
 
     async def _generate_phenotype_field(self, gene_symbol: str, observation: Observation) -> str:
         # Obtain all the phenotype strings listed in the text associated with the gene.
@@ -257,9 +260,37 @@ class PromptBasedContentExtractor(IExtractFields):
         # Duplicates are conceivable, get unique set again.
         return "; ".join(set(structured_phenotypes))
 
-    async def _run_field_prompt(self, gene_symbol: str, observation: Observation, field: str) -> Dict[str, Any]:
+
+
+    async def _generate_functional_study_field(self, gene_symbol: str, observation: Observation, field: str) -> str:
+        """Generate functional study fields using structured prompt."""
+        prompt_file, response_model = self._PROMPT_FIELDS[field]
+        
+        response = await self._llm_client.prompt_file_structured(
+            user_prompt_file=prompt_file,
+            response_model=response_model,
+            system_prompt=self._SYSTEM_PROMPT,
+            params={
+                "passage": "\n\n".join([t.text for t in observation.texts]),
+                "variant_descriptions": ", ".join(observation.variant_descriptions),
+                "gene": gene_symbol,
+            },
+            prompt_settings={
+                "prompt_tag": field,
+                "prompt_metadata": {"gene_symbol": gene_symbol, "paper_id": observation.paper_id},
+            },
+        )
+        
+        if response is None:
+            logger.warning(f"Structured prompt failed for {field}")
+            return "failed"
+            
+        func_studies = response.functional_study
+        return "True" if field in func_studies else "False"
+
+    async def _generate_structured_field(self, gene_symbol: str, observation: Observation, field: str, prompt_file: str, response_model, field_key: str) -> str:
+        """Generic method to generate any structured field."""
         params = {
-            # First element is full text of the observation, consider alternatives
             "passage": "\n\n".join([t.text for t in observation.texts]),
             "variant_descriptions": ", ".join(observation.variant_descriptions),
             "patient_descriptions": ", ".join(observation.patient_descriptions),
@@ -269,28 +300,20 @@ class PromptBasedContentExtractor(IExtractFields):
             "prompt_tag": field,
             "prompt_metadata": {"gene_symbol": gene_symbol, "paper_id": observation.paper_id},
         }
-        return await self._run_json_prompt(self._PROMPT_FIELDS[field], params, prompt_settings)
-
-    async def _generate_basic_field(self, gene_symbol: str, observation: Observation, field: str) -> str:
-        result = (await self._run_field_prompt(gene_symbol, observation, field)).get(field, "failed")
-        # result can be a string or a json object.
-        if not isinstance(result, str):
-            result = json.dumps(result)
-        return result
-
-    async def _generate_functional_study_field(self, gene_symbol: str, observation: Observation, field: str) -> str:
-        result = await self._run_field_prompt(gene_symbol, observation, field)
-        func_studies = result.get("functional_study", [])
-
-        # Note the prompt uses a different set of strings to represent the study types found, so we need to map them.
-        map = {
-            "engineered_cells": "cell line",
-            "patient_cells_tissues": "patient cells",
-            "animal_model": "animal model",
-            "none": "none",
-        }
-
-        return "True" if (map[field] in func_studies) else "False"
+        
+        response = await self._llm_client.prompt_file_structured(
+            user_prompt_file=prompt_file,
+            response_model=response_model,
+            system_prompt=self._SYSTEM_PROMPT,
+            params=params,
+            prompt_settings=prompt_settings,
+        )
+        
+        if response is None:
+            logger.warning(f"Structured prompt failed for {field}")
+            return "failed"
+            
+        return getattr(response, field_key)
 
     async def _generate_prompt_field(self, gene_symbol: str, observation: Observation, field: str) -> str:
         if field == "phenotype":
@@ -298,7 +321,9 @@ class PromptBasedContentExtractor(IExtractFields):
         elif field in ["engineered_cells", "patient_cells_tissues", "animal_model"]:
             return await self._generate_functional_study_field(gene_symbol, observation, field)
         else:
-            return await self._generate_basic_field(gene_symbol, observation, field)
+            # Use the structured field approach for all other fields
+            prompt_file, response_model = self._PROMPT_FIELDS[field]
+            return await self._generate_structured_field(gene_symbol, observation, field, prompt_file, response_model, field)
 
     async def _get_fields(
         self,

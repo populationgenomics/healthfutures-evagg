@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Sequence
 
 from lib.evagg.interfaces import IGetPapers
 from lib.evagg.llm import IPromptClient
+from lib.evagg.llm.models import PaperCategoryResponse
 from lib.evagg.ref import IPaperLookupClient
 from lib.evagg.types import Paper
 
@@ -99,14 +100,19 @@ class RareDiseaseFileLibrary(IGetPapers):
 
         # Few shot examples embedded into paper finding classification prompt
         prompt_metadata = {"gene_symbol": gene, "paper_id": paper.id}
-        response = await self._llm_client.prompt_file(
+        response = await self._llm_client.prompt_file_structured(
             user_prompt_file=_get_prompt_file_path("paper_category"),
+            response_model=PaperCategoryResponse,
             system_prompt="Extract field",
             params=parameters,
             prompt_settings={"prompt_tag": "paper_category", "prompt_metadata": prompt_metadata, "temperature": 0.8},
         )
 
-        result = response.strip('"')
+        if response is None:
+            logger.warning(f"LLM failed to categorize paper {paper.id}")
+            return "other"  # Default category when extraction fails
+
+        result = response.category
 
         if result in self.CATEGORIES:
             return result

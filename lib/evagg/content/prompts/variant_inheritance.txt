@@ -1,7 +1,5 @@
 Determine inheritance for patient {{$patient_descriptions}} with variant {{$variant_descriptions}} in gene {{$gene}}.
 
-CRITICAL: Respond with ONLY valid JSON. No explanatory text.
-
 Inheritance definitions:
 - "inherited": variant inherited from one or both parents
 - "de novo": variant arose during DNA replication, not inherited from parents  
@@ -10,5 +8,3 @@ Inheritance definitions:
 Options: "inherited", "de novo", "unknown"
 
 Evidence: {{$passage}}
-
-Format: {"variant_inheritance": "your_choice"}
