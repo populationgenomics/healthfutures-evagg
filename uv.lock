@@ -436,7 +436,7 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "jinja2", specifier = ">=3.1.4" },
-    { name = "litellm", specifier = ">=1.72.7" },
+    { name = "litellm", specifier = ">=1.73.0" },
     { name = "matplotlib", specifier = ">=3.9.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "numpy", specifier = ">=2.2.0" },
@@ -915,7 +915,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.72.7"
+version = "1.73.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -930,9 +930,9 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/49/55/985c5d32af6ff43b98fbddf6739b8a225acc703ef3980d60cc4410084557/litellm-1.72.7.tar.gz", hash = "sha256:9bfdc156ebd8cb2fc869e0a388931b64468c4fd534df6a2f6e27f9cba2dafcb9", size = 8418897, upload-time = "2025-06-20T01:58:40.873Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/5e/e110a45916b18ac93234e1b76a6ca57e7a3f9d38c4b9c004b68aedcddf41/litellm-1.73.0.tar.gz", hash = "sha256:4fdbb86f349be2038068827517786f6f7e7f761528d8f5d4b941b406d33bb8c3", size = 8553383, upload-time = "2025-06-22T00:56:14.44Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/55/78455fac9172a9b668c01b85df27e340d71df8e18771590fa45a04aec14e/litellm-1.72.7-py3-none-any.whl", hash = "sha256:704317ca71b00ca7fb164e8367e6559712605ed7f96f6d7fdb8b1276904a95e9", size = 8325244, upload-time = "2025-06-20T01:58:38.873Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/ef/a788e2aca00e1afa97e07a14e85b9a1189498bbd424be7e1aea57cc5a831/litellm-1.73.0-py3-none-any.whl", hash = "sha256:0a0a14c2f2522ffaf6cfbea043108d837047ee2b8dff5fb1dc14a7bd3cea0118", size = 8358192, upload-time = "2025-06-22T00:56:12.15Z" },
 ]
 
 [[package]]

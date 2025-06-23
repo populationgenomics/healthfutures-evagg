@@ -37,7 +37,7 @@ dependencies = [
     "pymongo>=4.11.0",
     
     # AI/ML
-    "litellm>=1.72.7",
+    "litellm>=1.73.0",
     "boto3>=1.38.40",
     "scikit-learn>=1.6.0",
     "instructor>=1.8.3",
