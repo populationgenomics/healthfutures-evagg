@@ -258,6 +258,14 @@ class LiteLLMClient(IPromptClient):
         Pydantic model schema. It automatically adds JSON schema instructions to the
         prompt and handles validation/retries.
         
+        Failure Modes (returns None):
+        - Instructor validation failures: When LLM response doesn't match expected schema
+        - Incomplete output: When LLM response is truncated before completion
+        - Parsing errors: When response cannot be converted to the expected format
+        
+        Network/API errors (rate limits, timeouts, connection issues) are retried
+        automatically and only propagate after multiple failures.
+        
         Args:
             user_prompt: The prompt text, which can contain template placeholders
             response_model: Pydantic model class that defines the expected response structure
@@ -356,11 +364,14 @@ class LiteLLMClient(IPromptClient):
                     connection_errors += 1
                     await asyncio.sleep(1)
                 else:
-                    # If it's a non-retriable error (parsing/validation), return None
-                    logger.error(f"Instructor failed after all retries for {prompt_tag}: {e}")
+                    # If it's a non-retriable error (parsing/validation), return None with detailed logging
+                    logger.error(f"Instructor validation failed after all retries for {prompt_tag}: {e}. "
+                               f"This indicates the LLM response could not be parsed into the expected {response_model.__name__} format. "
+                               f"Original exception: {original_exception}")
                     return None
             except IncompleteOutputException as e:
-                logger.error(f"Instructor failed due to incomplete output for {prompt_tag}: {e}")
+                logger.error(f"Instructor failed due to incomplete output for {prompt_tag}: {e}. "
+                           f"The LLM response was truncated and could not be validated against {response_model.__name__}")
                 return None
             except Exception as e:
                 logger.error(f"🔍 DEBUG: Uncaught exception type: {type(e).__module__}.{type(e).__name__} - {e}")
