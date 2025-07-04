@@ -1,28 +1,31 @@
 # Evidence Aggregator Bpipe Pipeline
 
-This directory contains the Bpipe pipeline configuration for running Evidence Aggregator in a containerized environment.
+This directory contains the Bpipe pipeline configuration for running Evidence Aggregator in a containerized environment using Singularity.
 
-## Building the Docker Image
+## Building the Singularity Image
 
-To build the Evidence Aggregator Docker image:
+To build the Evidence Aggregator Singularity image:
 
 ```bash
 # Get the semantic version from pyproject.toml
 VERSION=$(grep '^version = ' ../pyproject.toml | cut -d'"' -f2)
-module load apptainer
-apptainer build evagg-${VERSION}.sif evagg.def
+docker build -t evagg:${VERSION} -f Dockerfile ..
+singularity build evagg-${VERSION}.sif docker-daemon://evagg:${VERSION}
 ```
 
 Note: The build context is set to the parent directory (`..`) to include the entire project.
 
 ## Running the Pipeline
 
-The pipeline requires either OpenAI or AWS credentials:
+```bash
+bpipe run evagg_pipeline.groovy -gene_symbol BRCA1 -output_filename results.json
+```
 
 ### For OpenAI
- 
+
 ```bash
 export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="http://localhost:8080"  # For llama.cpp server
 ```
 
 ### For AWS Bedrock
@@ -38,16 +41,3 @@ If you have profiles / credentials set up in `~/.aws`, you can set `$AWS_PROFILE
 ```bash
 eval $(aws configure export-credentials --profile $AWS_PROFILE --format env)
 ```
-
-### Running the pipeline
-
-```bash
-bpipe run evagg_pipeline.groovy -gene_symbol BRCA1
-```
-
-## Model Configuration
-
-The pipeline automatically selects models based on available credentials:
-
-- **OpenAI** (if `OPENAI_API_KEY` is set): `gpt-4.1` and `text-embedding-3-small`
-- **AWS Bedrock** (if AWS credentials are set): `bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0` and `bedrock/amazon.titan-embed-text-v2:0`
