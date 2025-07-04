@@ -1,23 +1,22 @@
 // EVAGG Pipeline for processing single gene symbols
 // Usage: bpipe run evagg_pipeline.groovy -gene_symbol BRCA1
 
-// Configuration
-EVAGG_IMAGE = "evagg" // Default Docker image tag
-LITELLM_BUDGET_USD = 20.0 // Budget limit in USD
+// Load the default configuration
+load 'config.groovy'
 
-// Check for either OpenAI or AWS credentials
-OPENAI_API_KEY = System.getenv("OPENAI_API_KEY")
-AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY")
+// Singularity image file
+EVAGG_IMAGE = "$TOOLS/containers/evagg-eab1965.sif"
+
+// LLM configuration
+LITELLM_BUDGET_USD = 20.0 // Budget limit in USD
+LITELLM_MODEL = "bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0" // LLM model to use
+
+// AWS configuration
+AWS_PROFILE = "aasgard" // AWS profile to use
 AWS_DEFAULT_REGION = System.getenv("AWS_DEFAULT_REGION") ?: "ap-southeast-2" // Default to Melbourne region
 
-// At least one set of credentials must be available
-boolean hasOpenAI = OPENAI_API_KEY != null
-boolean hasAWS = AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY
-
-if (!hasOpenAI && !hasAWS) {
-    throw new RuntimeException("Either OPENAI_API_KEY or AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) must be set")
-}
+// Get user's home directory for AWS credentials
+USER_HOME = System.properties["user.home"]
 
 options {
     gene_symbol 'Gene symbol to find evidence for', args: 1, required: true
@@ -37,39 +36,30 @@ run_evagg = {
   "retmax": 25
 """
         
-        // Create environment file with credentials (for Docker --env-file)
-        def envFile = new File(".env")
-        def envContent = "LITELLM_BUDGET_USD=${LITELLM_BUDGET_USD}\n"
-        
-        if (hasAWS) {
-            envContent += """\
-LITELLM_MODEL=bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-"""
-        } else if (hasOpenAI) {
-            envContent += """\
-LITELLM_MODEL=gpt-4.1
-LITELLM_API_KEY=${OPENAI_API_KEY}
-"""
-        }
-        
-        envFile.text = envContent
         // Run the Docker container with mounted volumes.
         // .ref is for processed reference files, which can be shared between different runs.
         exec """
-            docker run --rm
-                --env-file ${PWD}/.env
-                -v ${PWD}/config_mount/genes.yaml:/app/lib/config/queries/genes.yaml:ro
-                -v ${PWD}/output_mount:/app/.out
-                -v ${PWD}/../.ref:/app/.ref
-                ${EVAGG_IMAGE}
-                lib/config/evagg_pipeline_curio.yaml
+            singularity exec \
+                --containall \
+                --cleanenv \
+                --no-home \
+                --writable-tmpfs \
+                --pwd /app \
+                --bind ${USER_HOME}/.aws/credentials:/root/.aws/credentials:ro \
+                --bind ${PWD}/../.ref:/app/.ref \
+                --bind ${PWD}/config_mount/genes.yaml:/app/lib/config/queries/genes.yaml:ro \
+                --bind ${PWD}/output_mount:/app/.out \
+                --env AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials \
+                --env AWS_PROFILE=${AWS_PROFILE} \
+                --env AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
+                --env LITELLM_BUDGET_USD=${LITELLM_BUDGET_USD} \
+                --env LITELLM_MODEL=${LITELLM_MODEL} \
+                ${EVAGG_IMAGE} \
+                run_evagg_app lib/config/evagg_pipeline_curio.yaml
 
             mv output_mount/evagg_results.json $output
             
-            rm -r config_mount output_mount .env
+            rm -r config_mount output_mount
         """
     }
 }
