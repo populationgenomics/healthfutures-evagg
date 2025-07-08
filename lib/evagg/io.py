@@ -4,9 +4,10 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Mapping, Optional, Sequence
+from typing import Dict, Mapping, Optional, Sequence
 
 from lib.evagg.utils.run import get_run_path
+from lib.evagg import __version__
 
 from .interfaces import IWriteOutput
 
@@ -61,8 +62,15 @@ class TableOutputWriter(IWriteOutput):
 
 
 class JSONOutputWriter(IWriteOutput):
-    def __init__(self, json_name: Optional[str] = None) -> None:
+    def __init__(self, json_name: Optional[str] = None, env_config: Optional[Dict[str, str]] = None) -> None:
         self._generated = datetime.now().astimezone()
+        
+        # Build version: base version + model version (if provided in env_config)
+        if env_config and "model" in env_config:
+            self._version = f"{__version__}-{env_config['model']}"
+        else:
+            self._version = __version__
+        
         self._path = _get_output_path(json_name, 'json')
         if self._path and os.path.exists(self._path):
             logger.warning(f"Overwriting existing output file: {self._path}")
@@ -82,6 +90,7 @@ class JSONOutputWriter(IWriteOutput):
         # Convert Mapping objects to regular dicts for JSON serialization
         json_output = {
             "generated": self._generated.isoformat(),
+            "version": self._version,
             "data": [dict(item) for item in output]
         }
 

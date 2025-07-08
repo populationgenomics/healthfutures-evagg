@@ -5,11 +5,13 @@ log:
   level: INFO
   to_file: true
 
+env_config:
+  di_factory: lib.evagg.utils.get_env_settings
+  filter_prefix: "LITELLM_"
+
 llm_client:
   di_factory: lib.evagg.llm.LiteLLMClient
-  config:
-    di_factory: lib.evagg.utils.get_env_settings
-    filter_prefix: "LITELLM_"
+  config: "{{env_config}}"
 
 # Application.
 di_factory: lib.evagg.PaperQueryApp
@@ -28,9 +30,7 @@ extractor:
     di_factory: lib/config/fields/evidence_all.yaml
   llm_client:
     di_factory: lib.evagg.llm.LiteLLMCacheClient
-    config:
-      di_factory: lib.evagg.utils.get_env_settings
-      filter_prefix: "LITELLM_"
+    config: "{{env_config}}"
   phenotype_searcher:
     di_factory: lib.evagg.ref.WebHPOClient
     web_client:
@@ -47,3 +47,4 @@ extractor:
 writer:
   di_factory: lib.evagg.JSONOutputWriter
   json_name: /app/.out/evagg_results.json
+  env_config: "{{env_config}}"

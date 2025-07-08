@@ -7,9 +7,10 @@ This directory contains the Bpipe pipeline configuration for running Evidence Ag
 To build the Evidence Aggregator apptainer image:
 
 ```bash
-GIT_HASH=$(git rev-parse --short HEAD)
+# Get the semantic version from pyproject.toml
+VERSION=$(grep '^version = ' ../pyproject.toml | cut -d'"' -f2)
 module load apptainer
-apptainer build evagg-${GIT_HASH}.sif evagg.def
+apptainer build evagg-${VERSION}.sif evagg.def
 ```
 
 ## Running the Pipeline

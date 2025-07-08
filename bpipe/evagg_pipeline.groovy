@@ -4,12 +4,8 @@
 // Load the default configuration
 load 'config.groovy'
 
-// apptainer image file
-EVAGG_IMAGE = "$TOOLS/containers/evagg-eab1965.sif"
-
 // LLM configuration
 LITELLM_BUDGET_USD = 20.0 // Budget limit in USD
-LITELLM_MODEL = "bedrock/apac.anthropic.claude-sonnet-4-20250514-v1:0" // LLM model to use
 
 // AWS configuration
 AWS_PROFILE = "aasgard" // AWS profile to use
@@ -21,12 +17,16 @@ USER_HOME = System.properties["user.home"]
 options {
     gene_symbol 'Gene symbol to find evidence for', args: 1, required: true
     output_filename 'Output filename, can be used to force a rerun by using unique outputs', args: 1, required: true
+    evagg_version 'EvAgg container version to use', args: 1, required: true
+    litellm_model 'LLM model to use', args: 1, required: true
 }
     
 run_evagg = {
     doc "Run EVAGG for a single gene symbol"
     
     produce(opts.output_filename) {
+        // Build image path from version
+        def evaggImage = "$TOOLS/containers/evagg-${opts.evagg_version}.sif"
         new File("config_mount").mkdirs()
         new File("output_mount").mkdirs()
         
@@ -54,8 +54,8 @@ run_evagg = {
                 --env AWS_PROFILE=${AWS_PROFILE} \
                 --env AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
                 --env LITELLM_BUDGET_USD=${LITELLM_BUDGET_USD} \
-                --env LITELLM_MODEL=${LITELLM_MODEL} \
-                ${EVAGG_IMAGE} \
+                --env LITELLM_MODEL=${opts.litellm_model} \
+                ${evaggImage} \
                 run_evagg_app lib/config/evagg_pipeline_curio.yaml
 
             mv output_mount/evagg_results.json $output
