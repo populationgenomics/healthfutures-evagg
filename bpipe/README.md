@@ -9,11 +9,8 @@ To build the Evidence Aggregator Singularity image:
 ```bash
 # Get the semantic version from pyproject.toml
 VERSION=$(grep '^version = ' ../pyproject.toml | cut -d'"' -f2)
-docker build -t evagg:${VERSION} -f Dockerfile ..
-singularity build evagg-${VERSION}.sif docker-daemon://evagg:${VERSION}
+singularity build evagg-${VERSION}.sif evagg.def
 ```
-
-Note: The build context is set to the parent directory (`..`) to include the entire project.
 
 ## Running the Pipeline
 
