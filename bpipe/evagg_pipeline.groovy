@@ -4,7 +4,7 @@
 // Load the default configuration
 load 'config.groovy'
 
-// Singularity image file
+// apptainer image file
 EVAGG_IMAGE = "$TOOLS/containers/evagg-eab1965.sif"
 
 // LLM configuration
@@ -36,10 +36,11 @@ run_evagg = {
   "retmax": 25
 """
         
-        // Run the Docker container with mounted volumes.
+        // Run the container image with mounted volumes.
+        // Use `singularity` instead of `apptainer` for backwards compatibility.
         // .ref is for processed reference files, which can be shared between different runs.
         exec """
-            singularity exec \
+            singularity run \
                 --containall \
                 --cleanenv \
                 --no-home \
