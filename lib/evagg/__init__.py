@@ -1,5 +1,8 @@
 """The evagg core library."""
 
+from importlib.metadata import version
+__version__ = version("evagg")
+
 from .app import PaperQueryApp
 from .content import PromptBasedContentExtractor, PromptBasedContentExtractorCached
 from .interfaces import IEvAggApp, IExtractFields, IGetPapers, IWriteOutput

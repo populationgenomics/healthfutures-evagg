@@ -7,7 +7,10 @@ This directory contains the Bpipe pipeline configuration for running Evidence Ag
 To build the Evidence Aggregator Docker image:
 
 ```bash
-docker build -t evagg -f Dockerfile ..
+# Get the semantic version from pyproject.toml
+VERSION=$(grep '^version = ' ../pyproject.toml | cut -d'"' -f2)
+module load apptainer
+apptainer build evagg-${VERSION}.sif evagg.def
 ```
 
 Note: The build context is set to the parent directory (`..`) to include the entire project.

@@ -15,13 +15,13 @@ An "app" is any Python class that implements the `lib.evagg.IEvAggApp` protocol 
 ```yaml
 # Reusable resource definitions.
 resource_1: <value or spec sub-dictionary>
-...
+---
 resource_n: <value or spec sub-dictionary>
 
 # Application definition.
 di_factory: <fully-qualified class name, factory method, or yaml file path>
 param_1: <value or spec sub-dictionary>
-...
+---
 param_n: <value or spec sub-dictionary>
 ```
 
@@ -45,15 +45,21 @@ uv run run_evagg_app lib/config/sample_config.yaml
 
 Proceed to [SETUP.md](SETUP.md) to set up external dependencies and perform a full-featured example execution of the pipeline against live resources.
 
-## Contributing
+### Version Management
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for additional detail on guidelines for contribution.
+The project uses semantic versioning managed by [Hatch](https://hatch.pypa.io/). To increment version numbers:
+
+- **Patch version** (e.g., `1.0.0` → `1.0.1`): `hatch version patch`
+- **Minor version** (e.g., `1.0.0` → `1.1.0`): `hatch version minor`
+- **Major version** (e.g., `1.0.0` → `2.0.0`): `hatch version major`
+
+**Important**: In terms of semantics, minor and major version changes imply that previous results are stale and pipeline reruns may be required, while patch versions won't trigger a rerun as they represent backward-compatible fixes.
 
 ### Code organization
 
 The repository contains the following subdirectories:
 
-  `root`  
+`root`  
 `|-- data`: sample and reference data  
 `|-- lib`: source code for scripts and core libraries  
 `|-- scripts`: helper scripts for pre- and post-processing of results  
@@ -64,6 +70,10 @@ The repository contains the following subdirectories:
 ### Pre-PR checks
 
 Before submitting any PR for review, please verify that linting checks pass (`make lint`) and that tests pass with acceptable coverage for any new code (`make test`). All pre-PR checks can be run in a single command via `make ci`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for additional detail on guidelines for contribution.
 
 ## Trademarks
 
@@ -83,7 +93,7 @@ The Evidence Aggregator literature discovery is limited to open-access publicati
 
 Performance was not optimized for genes with extensive evidence for definitive gene-disease relationships, but for genes with moderate, limited, or no known gene-disease relationship as annotated in Gene Curation Coalition (GenCC) <http://www.thegencc.org> [July 2024].
 
-The Evidence Aggregator uses the capabilities of generative AI for both publication foraging and information summarization. Performance of the Evidence Aggregator is limited to the capabilities of the underlying model.  
+The Evidence Aggregator uses the capabilities of generative AI for both publication foraging and information summarization. Performance of the Evidence Aggregator is limited to the capabilities of the underlying model.
 
 The design and assessment of the Evidence Aggregator were conducted in English. At present, the Evidence Aggregator is limited to processing inputs and generating outputs in the English language.
 
@@ -95,7 +105,7 @@ Harrison et al., **Ensembl 2024**, Nucleic Acids Research, 2024, 52(D1):D891–D
 
 Lefter M et al. (2021). Mutalyzer 2: Next Generation HGVS Nomenclature Checker. Bioinformatics, 2021 Sep 15; 37(28):2811-7
 
-The Evidence Aggregator uses the Human Phenotype Ontology (HPO version dependent on user environment build and pipeline execution date/time). <http://www.human-phenotype-ontology.org>  
+The Evidence Aggregator uses the Human Phenotype Ontology (HPO version dependent on user environment build and pipeline execution date/time). <http://www.human-phenotype-ontology.org>
 
 The Evidence Aggregator team thanks the Gene Curation Coalition (GenCC) for providing curated content referenced during development. GenCC’s curated content was obtained at <http://www.thegencc.org> [July 2024] and includes contributions from the following organizations: ClinGen, Ambry Genetics, Franklin by Genoox, G2P, Genomics England PanelApp, Illumina, Invitae, King Faisal Specialist Hospital and Research Center, Laboratory for Molecular Medicine, Myriad Women’s Health, Orphanet, PanelApp Australia.
 

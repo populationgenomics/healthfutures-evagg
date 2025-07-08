@@ -1,6 +1,6 @@
 [project]
 name = "evagg"
-version = "0.0.0"
+version = "0.1.0"
 description = "Evidence Aggregator for genomics literature"
 authors = [
     {name = "Microsoft Biomedical Computing Group", email = "BiomedComp@microsoft.com"}
