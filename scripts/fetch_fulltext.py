@@ -156,23 +156,28 @@ def extract_text_from_xml(xml_doc: str) -> str:
     return "\n".join(texts)
 
 
-def fetch_and_clean_fulltext(pmid: str) -> str | None:
-    """Main function to fetch and clean full text given a PMID."""
+def fetch_and_clean_fulltext(paper_id: str) -> str | None:
+    """Main function to fetch and clean full text given a PMID or PMCID."""
     client = NcbiClient()
 
-    # Step 1: Get paper metadata including PMCID
-    logger.info(f"Fetching metadata for PMID {pmid}...")
-    metadata = client.fetch_paper_metadata(pmid)
-    if not metadata:
-        logger.error("Failed to fetch paper metadata")
-        return None
+    # Check if input is a PMCID (starts with PMC) or PMID
+    if paper_id.upper().startswith("PMC"):
+        pmcid = paper_id.upper()
+        logger.info(f"Using provided PMCID: {pmcid}")
+    else:
+        # Step 1: Get paper metadata including PMCID
+        logger.info(f"Fetching metadata for PMID {paper_id}...")
+        metadata = client.fetch_paper_metadata(paper_id)
+        if not metadata:
+            logger.error("Failed to fetch paper metadata")
+            return None
 
-    pmcid = metadata.get("pmcid")
-    if not pmcid:
-        logger.error("No PMCID found for this paper - full text not available in PMC")
-        return None
+        pmcid = metadata.get("pmcid")
+        if not pmcid:
+            logger.error("No PMCID found for this paper - full text not available in PMC")
+            return None
 
-    logger.info(f"Found PMCID: {pmcid}")
+        logger.info(f"Found PMCID: {pmcid}")
 
     # Step 2: Check if the paper is available in PMC
     logger.info("Checking PMC availability...")
@@ -202,19 +207,20 @@ def fetch_and_clean_fulltext(pmid: str) -> str | None:
 def main():
     """Command line interface."""
     if len(sys.argv) < 2:
-        print("Usage: python fetch_fulltext.py <PMID>")
+        print("Usage: python fetch_fulltext.py <PMID|PMCID>")
         print("Example: python fetch_fulltext.py 12345678")
+        print("Example: python fetch_fulltext.py PMC11485346")
         sys.exit(1)
 
-    pmid = sys.argv[1]
+    paper_id = sys.argv[1]
 
     # Fetch and print the full text
-    fulltext = fetch_and_clean_fulltext(pmid)
+    fulltext = fetch_and_clean_fulltext(paper_id)
 
     if fulltext:
         print(fulltext)
     else:
-        print(f"Failed to retrieve full text for PMID {pmid}")
+        print(f"Failed to retrieve full text for {paper_id}")
         sys.exit(1)
 
 
