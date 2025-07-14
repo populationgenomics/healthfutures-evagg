@@ -6,7 +6,7 @@ Evidence Aggregator runs at the Linux command line and depends on access to mult
 
 ## Install software prerequisites
 
-- **Python** 3.13 or above
+- **Python** 3.12 or above
 - **uv** - Install via:
 
     ```bash
@@ -42,7 +42,7 @@ uv sync --dev
 ```
 
 This will:
-- Create a virtual environment with Python 3.13
+- Create a virtual environment with Python 3.12
 - Install all dependencies including development tools
 - Install the local library and register the pipeline run command
 
