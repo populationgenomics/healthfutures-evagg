@@ -49,9 +49,11 @@ Proceed to [SETUP.md](SETUP.md) to set up external dependencies and perform a fu
 
 The project uses semantic versioning managed by [Hatch](https://hatch.pypa.io/). To increment version numbers:
 
-- **Patch version** (e.g., `1.0.0` → `1.0.1`): `hatch version patch`
-- **Minor version** (e.g., `1.0.0` → `1.1.0`): `hatch version minor`
-- **Major version** (e.g., `1.0.0` → `2.0.0`): `hatch version major`
+- **Patch version** (e.g., `1.0.0` → `1.0.1`): `uvx hatch version patch`
+- **Minor version** (e.g., `1.0.0` → `1.1.0`): `uvx hatch version minor`
+- **Major version** (e.g., `1.0.0` → `2.0.0`): `uvx hatch version major`
+
+The version is stored in `lib/__about__.py` and can be accessed programmatically via `lib.__version__`.
 
 **Important**: In terms of semantics, minor and major version changes imply that previous results are stale and pipeline reruns may be required, while patch versions won't trigger a rerun as they represent backward-compatible fixes.
 
@@ -80,8 +82,8 @@ The Evidence Aggregator can be deployed using Docker or Apptainer (formerly Sing
 To build the Docker image:
 
 ```bash
-# Get the semantic version from pyproject.toml
-VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+# Get the semantic version
+VERSION=$(python3 -c "from lib.__about__ import __version__; print(__version__)")
 docker build -t evagg:${VERSION} .
 ```
 
@@ -90,8 +92,8 @@ docker build -t evagg:${VERSION} .
 To build the Apptainer image:
 
 ```bash
-# Get the semantic version from pyproject.toml
-VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+# Get the semantic version
+VERSION=$(python3 -c "from lib.__about__ import __version__; print(__version__)")
 module load apptainer
 apptainer build evagg-${VERSION}.sif evagg.def
 ```

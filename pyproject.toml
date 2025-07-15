@@ -1,6 +1,6 @@
 [project]
 name = "evagg"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Evidence Aggregator for genomics literature"
 authors = [
     {name = "Microsoft Biomedical Computing Group", email = "BiomedComp@microsoft.com"}
@@ -71,6 +71,9 @@ run_evagg_app = "lib.execute:run_evagg_app"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "lib/__about__.py"
 
 [tool.uv]
 dev-dependencies = [
