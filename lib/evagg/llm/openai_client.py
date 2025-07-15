@@ -44,9 +44,9 @@ class ChatMessages:
 
 
 class OpenAIConfig(BaseModel):
-    model: str
-    embedding_model: str
-    api_key: str
+    model: str = "gpt-4.1"
+    embedding_model: str = "text-embedding-3-small"
+    api_key: str = "dummy-api-key"
     base_url: Optional[str] = None
     organization: Optional[str] = None
     max_parallel_requests: int = 0
@@ -69,18 +69,18 @@ class OpenAIClient(IPromptClient):
             f"Using OpenAI API with model {self._config.model}"
             + f" (max_parallel={self._config.max_parallel_requests})."
         )
-        
+
         client_options = {
             "api_key": self._config.api_key,
             "timeout": self._config.timeout,
         }
-        
+
         if self._config.base_url:
             client_options["base_url"] = self._config.base_url
-            
+
         if self._config.organization:
             client_options["organization"] = self._config.organization
-            
+
         return AsyncOpenAI(**client_options)
 
     @lru_cache
