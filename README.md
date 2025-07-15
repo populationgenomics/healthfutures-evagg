@@ -71,6 +71,31 @@ The repository contains the following subdirectories:
 
 Before submitting any PR for review, please verify that linting checks pass (`make lint`) and that tests pass with acceptable coverage for any new code (`make test`). All pre-PR checks can be run in a single command via `make ci`.
 
+## Container Deployment
+
+The Evidence Aggregator can be deployed using Docker or Apptainer (formerly Singularity) containers.
+
+### Building the Docker Image
+
+To build the Docker image:
+
+```bash
+# Get the semantic version from pyproject.toml
+VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+docker build -t evagg:${VERSION} .
+```
+
+### Building the Apptainer Image
+
+To build the Apptainer image:
+
+```bash
+# Get the semantic version from pyproject.toml
+VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+module load apptainer
+apptainer build evagg-${VERSION}.sif evagg.def
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for additional detail on guidelines for contribution.

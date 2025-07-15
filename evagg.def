@@ -2,10 +2,10 @@ Bootstrap: docker
 From: ghcr.io/astral-sh/uv:0.7.19-python3.12-bookworm-slim
 
 %files
-    ../pyproject.toml /app/
-    ../uv.lock /app/
-    ../README.md /app/
-    ../lib /app/lib
+    pyproject.toml /app/
+    uv.lock /app/
+    README.md /app/
+    lib /app/lib
 
 %post
     cd /app
