@@ -50,7 +50,7 @@ class OpenAIConfig(BaseModel):
     base_url: Optional[str] = None
     organization: Optional[str] = None
     max_parallel_requests: int = 0
-    timeout: int = 60
+    timeout: int = 600
 
 
 class OpenAIClient(IPromptClient):
@@ -118,14 +118,16 @@ class OpenAIClient(IPromptClient):
                 rate_limit_errors += 1
                 await asyncio.sleep(1)
             except (openai.APIConnectionError, openai.APITimeoutError) as e:
-                if connection_errors > 2:
+                if connection_errors > 5:
                     if self._config.base_url and "localhost" in self._config.base_url:
                         logger.error("OpenAI API unreachable - have you failed to start a local proxy?")
                     raise
                 if connection_errors == 0:
                     logger.warning(f"Connectivity error on {prompt_tag}: {e.message}")
                 connection_errors += 1
-                await asyncio.sleep(1)
+                sleep_time = min(30, 2 ** connection_errors)
+                logger.info(f"Retrying in {sleep_time} seconds... (attempt {connection_errors}/5)")
+                await asyncio.sleep(sleep_time)
 
         prompt_metadata["returned_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         prompt_metadata["elapsed_time"] = f"{elapsed:.1f} seconds"
@@ -197,13 +199,14 @@ class OpenAIClient(IPromptClient):
                     logger.warning(f"Rate limit error on embeddings: {e}")
                     await asyncio.sleep(1)
                 except (openai.APIConnectionError, openai.APITimeoutError):
-                    if connection_errors > 2:
+                    if connection_errors > 5:
                         if self._config.base_url and "localhost" in self._config.base_url:
                             logger.error("OpenAI API unreachable - have you failed to start a local proxy?")
                         raise
                     logger.warning("Connectivity error on embeddings, retrying...")
                     connection_errors += 1
-                    await asyncio.sleep(1)
+                    sleep_time = min(30, 2 ** connection_errors)
+                    await asyncio.sleep(sleep_time)
 
         start_overall = time.time()
         tokens = await asyncio.gather(*[_run_single_embedding(input) for input in inputs])
