@@ -45,6 +45,9 @@ dependencies = [
     # Bioinformatics
     "biopython>=1.84",
     "hpo3>=1.4.0",
+    
+    # MCP
+    "fastmcp>=2.10.6",
 ]
 
 [project.optional-dependencies]

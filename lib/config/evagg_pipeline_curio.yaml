@@ -13,12 +13,31 @@ llm_client:
   di_factory: lib.evagg.llm.OpenAIClient
   config: "{{env_config}}"
 
+# MCP client for PubTator search
+mcp_client:
+  di_factory: lib.evagg.utils.create_mcp_client
+  env_vars:
+    di_factory: lib.evagg.utils.get_dotenv_settings
+  config:
+    mcp_servers:
+      pubtator:
+        command: "uv"
+        args: ["run", "pubtator-mcp-server", "--cache-dir", "${PUBTATOR_CACHE_DIR:-../../.cache}"]
+        cwd: "mcp/pubtator-mcp"
+
 # Application.
 di_factory: lib.evagg.PaperQueryApp
 queries:
   di_factory: lib/config/queries/genes.yaml
 library:
   di_factory: lib.evagg.RareDiseaseFileLibrary
+  paper_searcher:
+    # MCP-based search using PubTator
+    di_factory: lib.evagg.library.MCPPaperSearcher
+    mcp_client: "{{mcp_client}}"
+    tool_name: "search_gene_variant_papers"
+    parameter_mapping:
+      gene_symbol: "gene_symbol"
   paper_client:
     di_factory: lib/config/objects/ncbi.yaml
   llm_client: "{{llm_client}}"
@@ -44,7 +63,14 @@ extractor:
       di_factory: lib/config/objects/variant_factory.yaml
     variant_comparator: 
       di_factory: lib.evagg.content.HGVSVariantComparator
+    variant_finder:
+      di_factory: lib.evagg.content.MCPVariantFinder
+      mcp_client: "{{mcp_client}}"
+      tool_name: "extract_variants"
+      parameter_mapping:
+        text: "text"
+        gene_symbol: "gene_symbol"
 writer:
   di_factory: lib.evagg.JSONOutputWriter
-  json_name: /app/.out/evagg_results.json
+  json_name: ../evagg_results.json
   env_config: "{{env_config}}"
