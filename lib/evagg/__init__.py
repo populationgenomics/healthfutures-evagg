@@ -6,7 +6,7 @@ __version__ = version("evagg")
 from .app import PaperQueryApp
 from .content import PromptBasedContentExtractor, PromptBasedContentExtractorCached
 from .interfaces import IEvAggApp, IExtractFields, IGetPapers, IWriteOutput
-from .io import TableOutputWriter
+from .io import JSONOutputWriter, TableOutputWriter
 from .library import RareDiseaseFileLibrary, RareDiseaseLibraryCached
 from .simple import PropertyContentExtractor, SampleContentExtractor, SimpleFileLibrary
 from .truthset import TruthsetFileHandler
@@ -20,6 +20,7 @@ __all__ = [
     # App.
     "PaperQueryApp",
     # IO.
+    "JSONOutputWriter",
     "TableOutputWriter",
     # Library.
     "SimpleFileLibrary",

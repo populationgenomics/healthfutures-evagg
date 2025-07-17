@@ -2,6 +2,6 @@ di_factory: lib.evagg.llm.OpenAIClient
 config:
   di_factory: lib.evagg.utils.get_dotenv_settings
   filter_prefix: "OPENAI_"
-  # Optional configuration for connecting to custom endpoints like LiteLLM
-  # base_url: "http://localhost:4000" # LiteLLM gateway URL
+  # Optional configuration for connecting to custom endpoints like llama.cpp
+  # base_url: "http://localhost:8080" # llama.cpp server URL
   # organization: "org-123456" # Optional organization ID
