@@ -1,5 +1,6 @@
 from .interfaces import ICompareVariants, IFindObservations, IFindVariants, Observation, TextSection
 from .llm_variant_finder import LLMVariantFinder
+from .ner_variant_finder import NERVariantFinder
 from .observation import ObservationFinder
 from .prompt_based import PromptBasedContentExtractor
 from .prompt_based_cache import PromptBasedContentExtractorCached
@@ -20,5 +21,6 @@ __all__ = [
     "HGVSVariantComparator",
     # Observation.
     "LLMVariantFinder",
+    "NERVariantFinder",
     "ObservationFinder",
 ]

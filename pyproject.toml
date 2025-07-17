@@ -41,6 +41,8 @@ dependencies = [
     # AI/ML
     "openai>=1.86.0",
     "scikit-learn>=1.6.0",
+    "torch>=2.7.1",
+    "transformers>=4.53.2",
     
     # Bioinformatics
     "biopython>=1.84",
