@@ -75,28 +75,18 @@ Before submitting any PR for review, please verify that linting checks pass (`ma
 
 ## Container Deployment
 
-The Evidence Aggregator can be deployed using Docker or Apptainer (formerly Singularity) containers.
-
-### Building the Docker Image
-
-To build the Docker image:
-
-```bash
-# Get the semantic version
-VERSION=$(python3 -c "from lib.__about__ import __version__; print(__version__)")
-docker build -t evagg:${VERSION} .
-```
+The Evidence Aggregator can be deployed using Apptainer (formerly Singularity) containers with CUDA support.
 
 ### Building the Apptainer Image
 
-To build the Apptainer image:
+To build the Apptainer image with CUDA 12.8 support:
 
 ```bash
-# Get the semantic version
-VERSION=$(python3 -c "from lib.__about__ import __version__; print(__version__)")
 module load apptainer
-apptainer build evagg-${VERSION}.sif evagg.def
+apptainer build evagg.sif evagg.def
 ```
+
+The container includes PyTorch with CUDA 12.8 support for GPU-accelerated inference.
 
 ## Contributing
 
