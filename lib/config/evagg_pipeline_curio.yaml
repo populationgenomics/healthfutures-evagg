@@ -9,6 +9,9 @@ env_config:
   di_factory: lib.evagg.utils.get_env_settings
   filter_prefix: "OPENAI_"
 
+cache_dir_manager:
+  di_factory: lib.evagg.utils.CacheDirectoryManager
+
 llm_client:
   di_factory: lib.evagg.llm.OpenAIClient
   config: "{{env_config}}"
