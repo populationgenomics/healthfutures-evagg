@@ -10,7 +10,7 @@ from lib.evagg.llm import IPromptClient
 from lib.evagg.types import HGVSVariant, ICreateVariants, Paper
 
 from .fulltext import get_fulltext, get_sections
-from .interfaces import ICompareVariants, IFindObservations, Observation
+from .interfaces import ICompareVariants, IFindObservations, IFindVariants, Observation
 
 PatientVariant = Tuple[HGVSVariant, str]
 
@@ -19,6 +19,39 @@ logger = logging.getLogger(__name__)
 
 def _get_prompt_file_path(name: str) -> str:
     return os.path.join(os.path.dirname(__file__), "prompts", "observation", f"{name}.txt")
+
+
+async def run_json_prompt(
+    llm_client: IPromptClient,
+    prompt_filepath: str,
+    params: Dict[str, str],
+    prompt_settings: Dict[str, Any],
+    system_prompt: str,
+) -> Dict[str, Any]:
+    """Utility function to run a JSON prompt with an LLM client."""
+    default_settings = {
+        "max_tokens": 2048,
+        "prompt_tag": "observation",
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "response_format": {"type": "json_object"},
+    }
+    prompt_settings = {**default_settings, **prompt_settings}
+
+    response = await llm_client.prompt_file(
+        user_prompt_file=prompt_filepath,
+        system_prompt=system_prompt,
+        params=params,
+        prompt_settings=prompt_settings,
+    )
+
+    try:
+        result = json.loads(response)
+    except json.decoder.JSONDecodeError:
+        logger.error(f"Failed to parse response from LLM to {prompt_filepath}: {response}")
+        return {}
+
+    return result
 
 
 class ObservationFinder(IFindObservations):
@@ -39,37 +72,17 @@ uninterrupted sequences of whitespace characters.
         llm_client: IPromptClient,
         variant_factory: ICreateVariants,
         variant_comparator: ICompareVariants,
+        variant_finder: IFindVariants,
     ) -> None:
         self._llm_client = llm_client
         self._variant_factory = variant_factory
         self._variant_comparator = variant_comparator
+        self._variant_finder = variant_finder
 
     async def _run_json_prompt(
         self, prompt_filepath: str, params: Dict[str, str], prompt_settings: Dict[str, Any]
     ) -> Dict[str, Any]:
-        default_settings = {
-            "max_tokens": 2048,
-            "prompt_tag": "observation",
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "response_format": {"type": "json_object"},
-        }
-        prompt_settings = {**default_settings, **prompt_settings}
-
-        response = await self._llm_client.prompt_file(
-            user_prompt_file=prompt_filepath,
-            system_prompt=self._SYSTEM_PROMPT,
-            params=params,
-            prompt_settings=prompt_settings,
-        )
-
-        try:
-            result = json.loads(response)
-        except json.decoder.JSONDecodeError:
-            logger.error(f"Failed to parse response from LLM to {prompt_filepath}: {response}")
-            return {}
-
-        return result
+        return await run_json_prompt(self._llm_client, prompt_filepath, params, prompt_settings, self._SYSTEM_PROMPT)
 
     async def _check_patients(self, patient_candidates: Sequence[str], texts_to_check: Sequence[str]) -> List[str]:
         checked_patients: List[str] = []
@@ -163,80 +176,6 @@ uninterrupted sequences of whitespace characters.
 
         return checked_patients
 
-    async def _find_variant_descriptions(
-        self, full_text: str, focus_texts: Sequence[str] | None, gene_symbol: str, metadata: Dict[str, str]
-    ) -> Sequence[str]:
-        """Identify the genetic variants relevant to the gene_symbol described in the full text of the paper.
-
-        Returned variants will be _as described_ in the source text. Downstream manipulations to make them
-        HGVS-compliant may be required.
-        """
-        # Create prompts to find all the unique variants mentioned in the full text and focus texts.
-        prompt_runs = [
-            self._run_json_prompt(
-                prompt_filepath=_get_prompt_file_path("find_variants"),
-                params={"text": text, "gene_symbol": gene_symbol},
-                prompt_settings={"prompt_tag": "observation__find_variants", "prompt_metadata": metadata},
-            )
-            for text in ([full_text] if full_text else []) + list(focus_texts or [])
-        ]
-
-        # Run prompts in parallel.
-        responses = await asyncio.gather(*prompt_runs)
-
-        # Often, the gene-symbol is provided as a prefix to the variant, remove it.
-        # Note: we do additional similar checks later, but it's useful to do it now to reduce redundancy.
-        def _strip_gene_symbol(x: str) -> str:
-            # If x starts with gene_symbol, remove that and any subsequent colon.
-            if x.startswith(gene_symbol):
-                return x[len(gene_symbol) :].lstrip(":")
-            return x
-
-        candidates = list({_strip_gene_symbol(v) for r in responses for v in r.get("variants", []) if v != "unknown"})
-
-        # Seems like this should be unnecessary, but remove the example variants from the list of candidates.
-        example_variant_subs = [
-            "1234A>T",
-            "2345del",
-            "K34T",
-            "rs123456789",
-            "A55T",
-            "Ala55Lys",
-            "K412T",
-            "Ser195Gly",
-            "T65I",
-            "1234G>T",
-            "4321A>G",
-            "1234567A>T",
-        ]
-
-        if any(ex in ca for ex in example_variant_subs for ca in candidates):
-            candidates_from_examples = [ca for ca in candidates if any(ex in ca for ex in example_variant_subs)]
-            logger.warning(
-                f"Removing example variants found in candidates for {gene_symbol}: {candidates_from_examples}"
-            )
-            candidates = [ca for ca in candidates if ca not in candidates_from_examples]
-
-        # If the variant is reported with both coding and protein-level
-        # descriptions, split these into two with another prompt.
-        split_prompt_runs = []
-        for i in reversed(range(len(candidates))):
-            if "p." in candidates[i] and "c." in candidates[i]:
-                split_prompt_runs.append(
-                    self._run_json_prompt(
-                        prompt_filepath=_get_prompt_file_path("split_variants"),
-                        params={"variant_list": f'"{candidates[i]}"'},  # Encase in double-quotes for bulk calling.
-                        prompt_settings={"prompt_tag": "observation__split_variants", "prompt_metadata": metadata},
-                    )
-                )
-                del candidates[i]
-        # Run split prompts in parallel.
-        split_responses = await asyncio.gather(*split_prompt_runs)
-        # Add the split variants back in to the candidates list.
-        candidates.extend(v for r in split_responses for v in r.get("variants", []))
-
-        return candidates
-
     async def _find_genome_build(self, full_text: str, metadata: Dict[str, str]) -> str | None:
         """Identify the genome build used in the paper."""
         response = await self._run_json_prompt(
@@ -281,18 +220,18 @@ uninterrupted sequences of whitespace characters.
         # Filter out header-only table segments that don't contain actual data
         filtered_table_texts = []
         for table_text in table_texts:
-            lines = [line.strip() for line in table_text.split('\n') if line.strip()]
-            
+            lines = [line.strip() for line in table_text.split("\n") if line.strip()]
+
             # Filter criteria to identify header-only segments
             has_sufficient_lines = len(lines) > 2
             has_sufficient_length = len(table_text) > 100
-            
+
             # Only include segments that look like actual tables with data
             if has_sufficient_lines and has_sufficient_length:
                 filtered_table_texts.append(table_text)
             else:
                 logger.debug(f"Filtered out header-only table segment from {paper.id}: {table_text[:50]}...")
-        
+
         return full_text, filtered_table_texts
 
     def _get_text_mentioning_variant(self, paper: Paper, variant_descriptions: Sequence[str], allow_empty: bool) -> str:
@@ -466,7 +405,7 @@ uninterrupted sequences of whitespace characters.
             return []
 
         # Determine the candidate genetic variants matching `gene_symbol`
-        variant_descriptions = await self._find_variant_descriptions(
+        variant_descriptions = await self._variant_finder.find_variant_descriptions(
             full_text=full_text, focus_texts=table_texts, gene_symbol=gene_symbol, metadata=metadata
         )
         logger.debug(f"Found the following variants described for {gene_symbol} in {paper}: {variant_descriptions}")
@@ -555,7 +494,7 @@ variant isn't actually associated with the gene. But the possibility of previous
             variant_descriptions = descriptions_by_patient[individual]
             # LLM should not have returned any patient-linked variants that were not in the input.
             if missing_variants := [d for d in variant_descriptions if d not in variants_by_description]:
-                logger.warning(f"Variants '{", ".join(missing_variants)}' not found in paper variants.")
+                logger.warning(f"Variants '{', '.join(missing_variants)}' not found in paper variants.")
                 variant_descriptions = [d for d in variant_descriptions if d not in missing_variants]
 
             variants: Dict[HGVSVariant, List[str]] = defaultdict(list)
