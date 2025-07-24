@@ -23,17 +23,17 @@ from .interfaces import (
 logger = logging.getLogger(__name__)
 
 
-class _PmcCache:
-    """Helper class for managing PMC archive cache."""
+class _PmcMirror:
+    """Helper class for managing PMC archive mirror."""
 
-    def __init__(self, cache_dir: Path) -> None:
-        self.cache_dir = cache_dir
+    def __init__(self, mirror_dir: Path) -> None:
+        self.mirror_dir = mirror_dir
         # Get sorted list of archive prefixes for bisect search
-        archives = sorted(cache_dir.glob("PMC*_xml_ascii.tar.gz"))
+        archives = sorted(mirror_dir.glob("PMC*_xml_ascii.tar.gz"))
         self.archive_prefixes = [int(a.name[3:6]) for a in archives]
         # Cache for opened mount sources
         self._mount_cache: dict[str, Any] = {}
-        logger.debug(f"PMC cache initialized with {len(self.archive_prefixes)} archives")
+        logger.debug(f"PMC mirror initialized with {len(self.archive_prefixes)} archives")
 
     def get_archive_path(self, pmcid: str) -> Path | None:
         """Find the archive containing a given PMC ID."""
@@ -56,7 +56,7 @@ class _PmcCache:
         # Format archive name
         archive_prefix = f"PMC{self.archive_prefixes[idx]:03d}"
         archive_name = f"{archive_prefix}XXXXX_xml_ascii.tar.gz"
-        archive_path = self.cache_dir / archive_name
+        archive_path = self.mirror_dir / archive_name
 
         if not archive_path.exists():
             logger.debug(f"Archive not found: {archive_path}")
@@ -65,7 +65,7 @@ class _PmcCache:
         return archive_path
 
     def fetch_xml(self, pmcid: str) -> str:
-        """Fetch XML content for a PMC ID from the cache."""
+        """Fetch XML content for a PMC ID from the mirror."""
         archive_path = self.get_archive_path(pmcid)
         if not archive_path:
             raise ValueError(f"No archive found for {pmcid}")
@@ -90,11 +90,11 @@ class _PmcCache:
 
             with mount.open(file_info) as f:
                 content = f.read().decode("utf-8")
-                logger.info(f"Successfully fetched {pmcid} from local PMC cache")
+                logger.info(f"Successfully fetched {pmcid} from local PMC mirror")
                 return content
         except Exception as e:
-            logger.error(f"Failed to fetch {pmcid} from local PMC cache: {e}")
-            raise ValueError(f"Paper {pmcid} not found in local PMC cache") from e
+            logger.error(f"Failed to fetch {pmcid} from local PMC mirror: {e}")
+            raise ValueError(f"Paper {pmcid} not found in local PMC mirror") from e
 
 
 class NcbiApiSettings(BaseModel):
@@ -184,18 +184,20 @@ class NcbiLookupClient(
         self,
         web_client: IWebContentClient,
         settings: dict[str, str] | None = None,
-        mcp_cache_dir: str | None = None,
+        pmc_mirror_dir: str | None = None,
+        filter_nd_licenses: bool = False,
     ) -> None:
         super().__init__(web_client, settings)
-        self._pmc_cache = None
+        self._pmc_mirror = None
+        self._filter_nd_licenses = filter_nd_licenses
 
-        if mcp_cache_dir:
-            cache_path = Path(mcp_cache_dir)
-            if not cache_path.exists():
-                raise ValueError(f"PMC cache directory does not exist: {mcp_cache_dir}")
+        if pmc_mirror_dir:
+            mirror_path = Path(pmc_mirror_dir)
+            if not mirror_path.exists():
+                raise ValueError(f"PMC mirror directory does not exist: {pmc_mirror_dir}")
 
-            logger.info(f"PMC cache directory configured: {mcp_cache_dir}")
-            self._pmc_cache = _PmcCache(cache_path)
+            logger.info(f"PMC mirror directory configured: {pmc_mirror_dir}")
+            self._pmc_mirror = _PmcMirror(mirror_path)
 
     def _get_xml_props(self, article: Any) -> dict[str, str]:
         """Extracts paper properties from an XML root element."""
@@ -255,30 +257,39 @@ class NcbiLookupClient(
         derived_props["link"] = f"https://pubmed.ncbi.nlm.nih.gov/{props['pmid']}/"
         return derived_props
 
-    def _get_full_text_from_cache(self, pmcid: str) -> str:
-        """Attempt to fetch full text from local PMC cache."""
-        if not self._pmc_cache:
-            raise ValueError("PMC cache not configured")
+    def _extract_document_from_bioc(self, content: str, pmcid: str) -> str:
+        """Extract document element from BioC XML content."""
+        try:
+            root = ElementTree.fromstring(content)
+            # Find the specific document by PMC ID
+            if (doc := root.find(f"./document[id='{pmcid.upper().lstrip('PMC')}']")) is None and (
+                doc := root.find(f"./document[id='{pmcid.upper()}']")
+            ) is None:
+                logger.warning(f"Document {pmcid} not found in BioC content")
+                return ""
+            return ElementTree.tostring(doc, encoding="unicode")
+        except ElementTree.ParseError as e:
+            logger.error(f"Failed to parse BioC XML for {pmcid}: {e}")
+            return ""
 
-        return self._pmc_cache.fetch_xml(pmcid)
+    def _get_full_text_from_mirror(self, pmcid: str) -> str:
+        """Attempt to fetch full text from local PMC mirror."""
+        if not self._pmc_mirror:
+            raise ValueError("PMC mirror not configured")
+
+        content = self._pmc_mirror.fetch_xml(pmcid)
+        return self._extract_document_from_bioc(content, pmcid)
 
     def _get_full_text_online(self, pmcid: str) -> str:
         """Fetch full text from online NCBI endpoint."""
         logger.debug(f"Fetching {pmcid} from online NCBI endpoint")
         try:
             root = self._web_client.get(self.BIOC_GET_URL.format(pmcid=pmcid), content_type="xml")
+            content = ElementTree.tostring(root, encoding="unicode")
+            return self._extract_document_from_bioc(content, pmcid)
         except (HTTPError, RetryError, ElementTree.ParseError) as e:
             logger.warning(f"Unexpected error fetching BioC entry for {pmcid}: {e}")
             return ""
-
-        # Find and return the specific document.
-        # Some BioC do not have the prefix stripped, so try both with and without prefix
-        if (doc := root.find(f"./document[id='{pmcid.upper().lstrip('PMC')}']")) is None and (
-            doc := root.find(f"./document[id='{pmcid.upper()}']")
-        ) is None:
-            logger.warning(f"Response received from BioC, but corresponding PMC ID not found: {pmcid}")
-            return ""
-        return ElementTree.tostring(doc, encoding="unicode")
 
     def _get_full_text(self, props: dict[str, Any]) -> str:
         """Get the full text of a paper from PMC."""
@@ -287,9 +298,9 @@ class NcbiLookupClient(
             logger.debug(f"Cannot fetch full text, paper 'pmcid:{pmcid}' is not in PMC-OA or has unusable license.")
             return ""
 
-        # Try cache first if available, otherwise fetch online
-        if self._pmc_cache:
-            return self._get_full_text_from_cache(pmcid)
+        # Try mirror first if available, otherwise fetch online
+        if self._pmc_mirror:
+            return self._get_full_text_from_mirror(pmcid)
         else:
             return self._get_full_text_online(pmcid)
 

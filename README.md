@@ -132,13 +132,13 @@ For improved performance and offline access, you can set up a local cache of PMC
 
    **Note:** This indexing step can take a while the first time but significantly improves subsequent access performance.
 
-4. **Enable cache in pipeline configuration:**
-   Edit your pipeline YAML config (e.g., `lib/config/objects/ncbi.yaml`) and uncomment the `mcp_cache_dir` parameter:
+4. **Enable mirror in pipeline configuration:**
+   Edit your pipeline YAML config (e.g., `lib/config/objects/ncbi.yaml`) and uncomment the `pmc_mirror_dir` parameter:
    ```yaml
-   mcp_cache_dir: ".cache/pmc" # Uncomment and set path to enable local PMC cache
+   pmc_mirror_dir: ".cache/pmc" # Uncomment and set path to enable local PMC mirror
    ```
 
-When enabled, the system will first attempt to fetch papers from the local cache before falling back to online retrieval.
+When enabled, the system will first attempt to fetch papers from the local mirror before falling back to online retrieval.
 
 ## Contributing
 

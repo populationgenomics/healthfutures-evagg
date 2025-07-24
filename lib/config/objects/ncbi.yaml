@@ -7,4 +7,5 @@ web_client:
 settings:
   di_factory: lib.evagg.utils.get_dotenv_settings
   filter_prefix: "NCBI_EUTILS_"
-# mcp_cache_dir: ".cache/pmc"  # Uncomment and set path to enable local PMC cache
+pmc_mirror_dir: ".cache/pmc"
+filter_nd_licenses: false
