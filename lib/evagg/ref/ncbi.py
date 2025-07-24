@@ -243,7 +243,7 @@ class NcbiLookupClient(
             props["can_access"] = True
             props["license"] = license = record.attrib.get("license", "unknown")
             props["OA"] = True
-            if "-ND" in license:
+            if self._filter_nd_licenses and "-ND" in license:
                 # If it has a "no derivatives" license, then we don't consider it open access.
                 logger.debug(f"PMC OA record found for {pmcid} but has a no-derivatives license: {license}")
                 props["can_access"] = False
