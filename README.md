@@ -98,6 +98,48 @@ module load apptainer
 apptainer build evagg-${VERSION}.sif evagg.def
 ```
 
+### PMC Cache Setup (Optional)
+
+For improved performance and offline access, you can set up a local cache of PMC (PubMed Central) archives:
+
+1. **Create cache directory:**
+
+   ```bash
+   mkdir -p .cache/pmc
+   cd .cache/pmc
+   ```
+
+2. **Download PMC archives using lftp:**
+
+   ```bash
+   lftp ftp.ncbi.nlm.nih.gov:/pub/wilbur/BioC-PMC -e "mget -c -P 5 PMC*xml_ascii.tar.gz; quit"
+   ```
+
+   **Note:** The PMC mirror is updated 3-4 times per year. To keep your cache current, set up a crontab to refresh periodically:
+
+   ```bash
+   # Add to crontab (crontab -e) to check for updates monthly
+   0 2 1 * * cd /path/to/.cache/pmc && lftp ftp.ncbi.nlm.nih.gov:/pub/wilbur/BioC-PMC -e "mget -c -P 5 PMC*xml_ascii.tar.gz; quit"
+   ```
+
+   The `-c` flag ensures efficient mirroring by only downloading new/updated files.
+
+3. **Create index files (first time setup):**
+
+   ```bash
+   uv run python -c "import glob; from ratarmountcore.mountsource.factory import open_mount_source; [open_mount_source(f) for f in glob.glob('.cache/pmc/PMC*_xml_ascii.tar.gz')]"
+   ```
+
+   **Note:** This indexing step can take a while the first time but significantly improves subsequent access performance.
+
+4. **Enable cache in pipeline configuration:**
+   Edit your pipeline YAML config (e.g., `lib/config/objects/ncbi.yaml`) and uncomment the `mcp_cache_dir` parameter:
+   ```yaml
+   mcp_cache_dir: ".cache/pmc" # Uncomment and set path to enable local PMC cache
+   ```
+
+When enabled, the system will first attempt to fetch papers from the local cache before falling back to online retrieval.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for additional detail on guidelines for contribution.

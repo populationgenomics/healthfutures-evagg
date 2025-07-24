@@ -45,9 +45,13 @@ dependencies = [
     # Bioinformatics
     "biopython>=1.84",
     "hpo3>=1.4.0",
-    
+
     # MCP
     "fastmcp>=2.10.6",
+    
+    # Archive mounting
+    "rapidgzip>=0.14.5",
+    "ratarmountcore[gzip]>=0.9.1",
 ]
 
 [project.optional-dependencies]
