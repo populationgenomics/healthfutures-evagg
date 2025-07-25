@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import os
 import traceback
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from lib.evagg import IEvAggApp
 
@@ -37,7 +39,7 @@ def _parse_args(args: Sequence[str] | None = None) -> Namespace:
     return parser.parse_args()
 
 
-def _parse_override_args(overrides: Sequence[str] | None) -> Dict[str, Any]:
+def _parse_override_args(overrides: Sequence[str] | None) -> dict[str, Any]:
     """Parse the override arguments into a nested dictionary."""
     if overrides is None:
         return {}
@@ -57,7 +59,7 @@ def _parse_override_args(overrides: Sequence[str] | None) -> Dict[str, Any]:
             pass
         return val
 
-    override_dict: Dict[str, Any] = {}
+    override_dict: dict[str, Any] = {}
     for override in overrides:
         key_path, _, value = override.partition(":")
         keys = key_path.split(".")
@@ -87,34 +89,36 @@ def run_evagg_app() -> None:
     spec = {"di_factory": config_yaml, **_parse_override_args(args.override)}
     app: IEvAggApp = DiContainer().create_instance(spec, {})
 
-    while True:
-
-        try:
-            app.execute()
-            break
-        except KeyboardInterrupt as e:
-            # Less verbose KeyboardInterrupt handling.
-            if tb := e.__traceback__:
-                while tb.tb_next:
-                    if "site-packages" in tb.tb_next.tb_frame.f_code.co_filename:
-                        break
-                    tb = tb.tb_next
-
-                # Print only the stack frame immediately before the site-packages level.
-                file_ref = f"{tb.tb_frame.f_code.co_filename}::{tb.tb_frame.f_code.co_name}"
-                print(f" KeyboardInterrupt in {file_ref} at line {tb.tb_lineno}")
-                # And then the innermost traceback.
-                traceback.print_tb(tb, limit=-1)
+    async def async_main():
+        while True:
+            try:
+                await app.execute()
                 break
-        except Exception as e:
-            logger.error(f"Error executing app: {e}")
-            # log the stack trace using logger.error
-            logger.error(traceback.format_exc())
-            # Check if we should retry the app run.
-            if args.retries == 0:
-                exit(1)
-            if args.retries > 0:
-                args.retries -= 1
+            except KeyboardInterrupt as e:
+                # Less verbose KeyboardInterrupt handling.
+                if tb := e.__traceback__:
+                    while tb.tb_next:
+                        if "site-packages" in tb.tb_next.tb_frame.f_code.co_filename:
+                            break
+                        tb = tb.tb_next
+
+                    # Print only the stack frame immediately before the site-packages level.
+                    file_ref = f"{tb.tb_frame.f_code.co_filename}::{tb.tb_frame.f_code.co_name}"
+                    print(f" KeyboardInterrupt in {file_ref} at line {tb.tb_lineno}")
+                    # And then the innermost traceback.
+                    traceback.print_tb(tb, limit=-1)
+                    break
+            except Exception as e:
+                logger.error(f"Error executing app: {e}")
+                # log the stack trace using logger.error
+                logger.error(traceback.format_exc())
+                # Check if we should retry the app run.
+                if args.retries == 0:
+                    exit(1)
+                if args.retries > 0:
+                    args.retries -= 1
+
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

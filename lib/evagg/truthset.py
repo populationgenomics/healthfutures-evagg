@@ -1,7 +1,8 @@
 import csv
 import logging
+from collections.abc import Sequence
 from functools import cache
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from lib.evagg.content.fulltext import get_sections
 from lib.evagg.ref import IPaperLookupClient
@@ -27,7 +28,7 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
         file_path: str,
         variant_factory: ICreateVariants,
         paper_client: IPaperLookupClient,
-        fields: Optional[Sequence[str]] = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
         PropertyContentExtractor.__init__(self, fields or [])
         self._file_path = file_path
@@ -35,19 +36,17 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
         self._paper_client = paper_client
 
     @cache
-    def _get_all_evidence(self) -> Sequence[Dict[str, Any]]:
+    def _get_all_evidence(self) -> Sequence[dict[str, Any]]:
         """Load the truthset evidence from the file and return it as a list of dictionaries."""
         with open(self._file_path) as tsvfile:
             column_names = [c.strip() for c in tsvfile.readline().split("\t")]
-            evidence = [dict(zip(column_names, row)) for row in csv.reader(tsvfile, delimiter="\t")]
+            evidence = [dict(zip(column_names, row, strict=False)) for row in csv.reader(tsvfile, delimiter="\t")]
 
         paper_count = len({ev["paper_id"] for ev in evidence})
         logger.info(f"Loaded {len(evidence)} rows with {paper_count} papers from {self._file_path}.")
         return evidence
 
-    def _get_evidence(
-        self, paper_id: Optional[str] = None, gene_symbol: Optional[str] = None
-    ) -> Sequence[Dict[str, Any]]:
+    def _get_evidence(self, paper_id: str | None = None, gene_symbol: str | None = None) -> Sequence[dict[str, Any]]:
         """Return the evidence rows that match the paper_id and gene_symbol."""
         return [
             evidence
@@ -56,7 +55,7 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
             and (gene_symbol is None or evidence["gene"] == gene_symbol)
         ]
 
-    def _parse_variant(self, ev: Dict[str, str]) -> HGVSVariant:
+    def _parse_variant(self, ev: dict[str, str]) -> HGVSVariant:
         """Parse the variant from the HGVS c. or p. description."""
         text_desc = ev["hgvs_c"] if ev["hgvs_c"].startswith("c.") else ev["hgvs_p"]
         variant = self._variant_factory.parse(text_desc, ev["gene"], ev["transcript"])
@@ -64,13 +63,13 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
         return variant
 
     # IGetPapers
-    def get_papers(self, query: Dict[str, Any]) -> Sequence[Paper]:
+    async def get_papers(self, query: dict[str, Any]) -> Sequence[Paper]:
         """For the TruthsetFileHandler, query is expected to be a gene symbol."""
         if not (gene_symbol := query.get("gene_symbol")):
             logger.warning("No gene symbol provided for truthset query.")
             return []
 
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         # Loop over all paper ids for evidence rows that match the gene symbol in order of paper_id.
         for paper_id in sorted({ev["paper_id"] for ev in self._get_evidence(gene_symbol=gene_symbol)}):
             # Fetch a Paper object with the extracted fields based on the PMID.
@@ -95,7 +94,7 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
             logger.warning(f"Skipping {paper.id} because full text could not be retrieved")
             return []
 
-        def _get_observation(evidence: Dict[str, str]) -> Observation:
+        def _get_observation(evidence: dict[str, str]) -> Observation:
             """Create an Observation object from the evidence dictionary."""
             individual = evidence["individual_id"]
             texts = list(get_sections(paper.props["fulltext_xml"]))
@@ -110,8 +109,8 @@ class TruthsetFileHandler(IGetPapers, IFindObservations, PropertyContentExtracto
         return [_get_observation(evidence) for evidence in self._get_evidence(paper.id, gene_symbol)]
 
     # PropertyContentExtractor/IExtractFields
-    def get_evidence(self, paper: Paper, gene_symbol: str) -> Sequence[Dict[str, str]]:
-        def _add_fields(ev: Dict[str, str]) -> Dict[str, str]:
+    def get_evidence(self, paper: Paper, gene_symbol: str) -> Sequence[dict[str, str]]:
+        def _add_fields(ev: dict[str, str]) -> dict[str, str]:
             """Add a unique identifier for the evidence."""
             if "evidence_id" in self._fields:
                 ev["evidence_id"] = self._parse_variant(ev).get_unique_id(ev["paper_id"], ev["individual_id"])

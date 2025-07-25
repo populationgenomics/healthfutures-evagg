@@ -34,26 +34,26 @@ def test_rare_disease_init(mock_paper_client: Any, mock_llm_client: Any) -> None
         RareDiseaseFileLibrary(paper_client, llm_client, ["invalid category"])
 
 
-def test_rare_disease_single_paper(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_rare_disease_single_paper(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
     rare_disease_paper = Paper(**json_load("rare_disease_paper.json"))
     paper_client = mock_paper_client([rare_disease_paper.props["pmid"]], rare_disease_paper)
     llm_client = mock_llm_client()
     llm_client._responses = iter("genetic disease")
     query = {"gene_symbol": "gene"}
     allowed_categories = ["genetic disease", "other"]
-    result = RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
     print("result", result)
     assert len(result) == 1
     assert result[0] == rare_disease_paper
 
 
-def test_rare_disease_extra_params(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_rare_disease_extra_params(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
     rare_disease_paper = Paper(**json_load("rare_disease_paper.json"))
     paper_client = mock_paper_client([rare_disease_paper.props["pmid"]], rare_disease_paper)
 
     # Simple retmax test.
     query = {"gene_symbol": "gene", "retmax": 9}
-    result = RareDiseaseFileLibrary(paper_client, mock_llm_client("genetic disease")).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, mock_llm_client("genetic disease")).get_papers(query)
     assert paper_client.last_call("search") == (
         {"query": "gene pubmed pmc open access[filter]"},
         {"retmax": 9},
@@ -64,7 +64,7 @@ def test_rare_disease_extra_params(mock_paper_client: Any, mock_llm_client: Any,
     # Simple min date test.
     paper_client = mock_paper_client([rare_disease_paper.props["pmid"]], rare_disease_paper)
     query = {"gene_symbol": "gene", "min_date": "2021/01/01"}
-    result = RareDiseaseFileLibrary(paper_client, mock_llm_client("genetic disease")).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, mock_llm_client("genetic disease")).get_papers(query)
     assert len(result) == 1 and result[0] == rare_disease_paper
 
     # Retmax results, signifies search overrun, results still returned.
@@ -72,17 +72,17 @@ def test_rare_disease_extra_params(mock_paper_client: Any, mock_llm_client: Any,
         [rare_disease_paper.props["pmid"], rare_disease_paper.props["pmid"]], rare_disease_paper, rare_disease_paper
     )
     query = {"gene_symbol": "gene", "retmax": 2}
-    result = RareDiseaseFileLibrary(paper_client, mock_llm_client("genetic disease", "genetic disease")).get_papers(
-        query
-    )
+    result = await RareDiseaseFileLibrary(
+        paper_client, mock_llm_client("genetic disease", "genetic disease")
+    ).get_papers(query)
     assert len(result) == 2 and result[0] == rare_disease_paper and result[1] == rare_disease_paper
 
 
-def test_rare_disease_no_paper(mock_paper_client: Any, mock_llm_client: Any) -> None:
+async def test_rare_disease_no_paper(mock_paper_client: Any, mock_llm_client: Any) -> None:
     paper_client = mock_paper_client([])
     llm_client = mock_llm_client()
     query = {"gene_symbol": "gene", "retmax": 1}
-    result = RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
     assert paper_client.last_call("search") == (
         {"query": "gene pubmed pmc open access[filter]"},
         {"retmax": 1},
@@ -91,7 +91,7 @@ def test_rare_disease_no_paper(mock_paper_client: Any, mock_llm_client: Any) -> 
     assert not result
 
 
-def test_rare_disease_paper_without_text(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_rare_disease_paper_without_text(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
     rare_disease_paper = Paper(**json_load("rare_disease_paper.json"))
     rare_disease_paper.props["title"] = None
     rare_disease_paper.props["abstract"] = None
@@ -99,12 +99,14 @@ def test_rare_disease_paper_without_text(mock_paper_client: Any, mock_llm_client
     llm_client = mock_llm_client("other")
     query = {"gene_symbol": "gene"}
     allowed_categories = ["genetic disease", "other"]
-    result = RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
     assert len(result) == 1
     assert result[0] == rare_disease_paper
 
 
-def test_rare_disease_paper_suffixed_keyword(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_rare_disease_paper_suffixed_keyword(
+    mock_paper_client: Any, mock_llm_client: Any, json_load: Any
+) -> None:
     rare_disease_paper = Paper(**json_load("rare_disease_paper.json"))
     rare_disease_paper.props["title"] = "A paper about Bradycardia"
     rare_disease_paper.props["abstract"] = None
@@ -112,24 +114,24 @@ def test_rare_disease_paper_suffixed_keyword(mock_paper_client: Any, mock_llm_cl
     llm_client = mock_llm_client("genetic disease")
     query = {"gene_symbol": "gene"}
     allowed_categories = ["genetic disease", "other"]
-    result = RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
     assert len(result) == 1
     assert result[0] == rare_disease_paper
 
 
-def test_rare_disease_paper_incomplete_query(mock_paper_client: Any, mock_llm_client: Any) -> None:
+async def test_rare_disease_paper_incomplete_query(mock_paper_client: Any, mock_llm_client: Any) -> None:
     paper_client = mock_paper_client()
     llm_client = mock_llm_client()
     query: Dict[str, str] = {}
     with pytest.raises(ValueError):
-        RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
+        await RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
 
     query = {"gene_symbol": "gene", "max_date": "2021/01/01"}
     with pytest.raises(ValueError):
-        RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
+        await RareDiseaseFileLibrary(paper_client, llm_client).get_papers(query)
 
 
-def test_rare_disease_get_papers(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_rare_disease_get_papers(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
     rare_disease_paper = Paper(**json_load("rare_disease_paper.json"))
     other_paper = Paper(**json_load("other_paper.json"))
     ids = [rare_disease_paper.props["pmid"], other_paper.props["pmid"]]
@@ -142,7 +144,7 @@ def test_rare_disease_get_papers(mock_paper_client: Any, mock_llm_client: Any, j
         "other",
     )
     query = {"gene_symbol": "gene"}
-    result = RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
+    result = await RareDiseaseFileLibrary(paper_client, llm_client, allowed_categories).get_papers(query)
     assert paper_client.last_call("search") == ({"query": "gene pubmed pmc open access[filter]"},)
     assert paper_client.last_call("fetch") == (other_paper.props["pmid"], {"include_fulltext": True})
     assert llm_client.last_call("prompt_file")[2]["params"]["abstract"] == "We report on ..."
@@ -191,7 +193,7 @@ def _paper_to_dict(paper: Paper) -> Dict[str, Any]:
     }
 
 
-def test_simple_search() -> None:
+async def test_simple_search() -> None:
     # Create a temporary directory and write some test papers to it
     with tempfile.TemporaryDirectory() as tmpdir:
         paper1 = Paper(id="1", citation="Test Paper 1", abstract="This is a test paper.", pmcid="PMC1234")
@@ -208,7 +210,7 @@ def test_simple_search() -> None:
         library = SimpleFileLibrary(collections=[tmpdir])
         # This should return all papers in the library.
         query = {"gene_symbol": "test gene", "retmax": 1}
-        results = library.get_papers(query)
+        results = await library.get_papers(query)
 
         # Check that the correct papers were returned
         assert len(results) == 3
@@ -218,12 +220,10 @@ def test_simple_search() -> None:
         assert paper3 in results
 
 
-def test_caching(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
+async def test_caching(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-
         # Mock get_run_path to return the temporary directory.
         with patch("lib.evagg.utils.cache.get_run_path", return_value=tmpdir):
-
             # verify no cache exists.
             assert not os.path.exists(
                 os.path.join(tmpdir, "results_cache", "RareDiseaseFileLibrary", "get_papers_gene.json")
@@ -236,7 +236,7 @@ def test_caching(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -
             library = RareDiseaseLibraryCached(
                 paper_client=paper_client, llm_client=llm_client, use_previous_cache=False
             )
-            result = library.get_papers(query)
+            result = await library.get_papers(query)
 
             assert len(result) == 1
             assert result[0] == rare_disease_paper
@@ -246,6 +246,6 @@ def test_caching(mock_paper_client: Any, mock_llm_client: Any, json_load: Any) -
             )
 
             # The injected dependencies will be exhausted, so if we don't use the cache, we'll get an error.
-            result = library.get_papers(query)
+            result = await library.get_papers(query)
             assert len(result) == 1
             assert result[0] == rare_disease_paper

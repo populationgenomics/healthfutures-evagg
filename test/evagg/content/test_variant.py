@@ -123,7 +123,6 @@ def mock_refseq_client(mock_client: Any) -> Any:
 def test_factory_parse_c_dot(
     mock_validator: Any, mock_normalizer: Any, mock_lookup_client: Any, mock_refseq_client: Any
 ) -> None:
-
     def standard_normalizer() -> INormalizeVariants:
         return mock_normalizer(
             {

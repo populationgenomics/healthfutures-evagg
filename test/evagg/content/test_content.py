@@ -47,7 +47,7 @@ def paper() -> Paper:
     )
 
 
-def test_prompt_based_content_extractor_valid_fields(
+async def test_prompt_based_content_extractor_valid_fields(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -103,7 +103,7 @@ def test_prompt_based_content_extractor_valid_fields(
     content_extractor = PromptBasedContentExtractor(
         list(fields.keys()), prompts, mock_observation([observation]), pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert prompts.call_count("prompt_file") == 6
     assert len(content) == 1
@@ -111,7 +111,7 @@ def test_prompt_based_content_extractor_valid_fields(
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_unsupported_field(
+async def test_prompt_based_content_extractor_unsupported_field(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {"unsupported_field": "unsupported_value"}
@@ -142,10 +142,10 @@ def test_prompt_based_content_extractor_unsupported_field(
         mock_phenotype_fetcher(),
     )
     with pytest.raises(ValueError):
-        _ = content_extractor.extract(paper, "test")
+        _ = await content_extractor.extract(paper, "test")
 
 
-def test_prompt_based_content_extractor_with_protein_consequence(
+async def test_prompt_based_content_extractor_with_protein_consequence(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -174,14 +174,14 @@ def test_prompt_based_content_extractor_with_protein_consequence(
     content_extractor = PromptBasedContentExtractor(
         list(fields.keys()), prompts, mock_observation([observation]), pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_invalid_model_response(
+async def test_prompt_based_content_extractor_invalid_model_response(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -208,14 +208,14 @@ def test_prompt_based_content_extractor_invalid_model_response(
     content_extractor = PromptBasedContentExtractor(
         list(fields.keys()), prompts, mock_observation([observation]), pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_empty_list(
+async def test_prompt_based_content_extractor_phenotype_empty_list(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -248,14 +248,14 @@ def test_prompt_based_content_extractor_phenotype_empty_list(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher(),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_hpo_description(
+async def test_prompt_based_content_extractor_phenotype_hpo_description(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -290,14 +290,14 @@ def test_prompt_based_content_extractor_phenotype_hpo_description(
         mock_phenotype_searcher([]),
         phenotype_fetcher,
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_empty_pheno_search(
+async def test_prompt_based_content_extractor_phenotype_empty_pheno_search(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -332,14 +332,14 @@ def test_prompt_based_content_extractor_phenotype_empty_pheno_search(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_simplification(
+async def test_prompt_based_content_extractor_phenotype_simplification(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -380,14 +380,14 @@ def test_prompt_based_content_extractor_phenotype_simplification(
         pheno_searcher,
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_no_results_in_text(
+async def test_prompt_based_content_extractor_phenotype_no_results_in_text(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -419,14 +419,14 @@ def test_prompt_based_content_extractor_phenotype_no_results_in_text(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_no_results_for_observation(
+async def test_prompt_based_content_extractor_phenotype_no_results_for_observation(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -459,14 +459,14 @@ def test_prompt_based_content_extractor_phenotype_no_results_for_observation(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_specific_individual(
+async def test_prompt_based_content_extractor_phenotype_specific_individual(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -498,14 +498,14 @@ def test_prompt_based_content_extractor_phenotype_specific_individual(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_phenotype_table_texts(
+async def test_prompt_based_content_extractor_phenotype_table_texts(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -541,7 +541,7 @@ def test_prompt_based_content_extractor_phenotype_table_texts(
         mock_phenotype_searcher([]),
         mock_phenotype_fetcher({}),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert prompts.call_count("prompt_file") == 2  # ensure both prompts were used.
     assert len(content) == 1
@@ -549,7 +549,7 @@ def test_prompt_based_content_extractor_phenotype_table_texts(
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_json_prompt_response(
+async def test_prompt_based_content_extractor_json_prompt_response(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -574,13 +574,13 @@ def test_prompt_based_content_extractor_json_prompt_response(
     content_extractor = PromptBasedContentExtractor(
         list(fields.keys()), prompts, mock_observation([observation]), mock_phenotype_searcher, mock_phenotype_fetcher
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     assert content[0]["zygosity"] == '{"key": "value"}'
 
 
-def test_prompt_based_content_extractor_functional_study(
+async def test_prompt_based_content_extractor_functional_study(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     fields = {
@@ -624,14 +624,14 @@ def test_prompt_based_content_extractor_functional_study(
         mock_phenotype_searcher(),
         mock_phenotype_fetcher(),
     )
-    content = content_extractor.extract(paper, fields["gene"])
+    content = await content_extractor.extract(paper, fields["gene"])
 
     assert len(content) == 1
     for key in fields:
         assert content[0][key] == fields[key]
 
 
-def test_prompt_based_content_extractor_field_caching_phenotype(
+async def test_prompt_based_content_extractor_field_caching_phenotype(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     paper_id = "12345678"
@@ -692,14 +692,14 @@ def test_prompt_based_content_extractor_field_caching_phenotype(
     content_extractor = PromptBasedContentExtractor(
         ["phenotype"], prompts, observation_finder, pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, "CHI3L1")
+    content = await content_extractor.extract(paper, "CHI3L1")
 
     assert len(content) == 2
     assert content[0]["phenotype"] == phenotype
     assert content[1]["phenotype"] == phenotype
 
 
-def test_prompt_based_content_extractor_field_caching_variant_type(
+async def test_prompt_based_content_extractor_field_caching_variant_type(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     paper_id = "12345678"
@@ -743,14 +743,14 @@ def test_prompt_based_content_extractor_field_caching_variant_type(
     content_extractor = PromptBasedContentExtractor(
         ["variant_type"], prompts, observation_finder, pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, "CHI3L1")
+    content = await content_extractor.extract(paper, "CHI3L1")
 
     assert len(content) == 2
     assert content[0]["variant_type"] == variant_type
     assert content[1]["variant_type"] == variant_type
 
 
-def test_prompt_based_content_extractor_field_caching_study_type(
+async def test_prompt_based_content_extractor_field_caching_study_type(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     paper_id = "12345678"
@@ -804,35 +804,35 @@ def test_prompt_based_content_extractor_field_caching_study_type(
     content_extractor = PromptBasedContentExtractor(
         ["study_type"], prompts, observation_finder, pheno_searcher, pheno_fetcher
     )
-    content = content_extractor.extract(paper, "CHI3L1")
+    content = await content_extractor.extract(paper, "CHI3L1")
 
     assert len(content) == 2
     assert content[0]["study_type"] == study_type
     assert content[1]["study_type"] == study_type
 
 
-def test_prompt_based_content_extractor_unprocessable_paper(
+async def test_prompt_based_content_extractor_unprocessable_paper(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     paper.props["can_access"] = False
     content_extractor = PromptBasedContentExtractor(
         [], mock_prompt({}), mock_observation([]), mock_phenotype_searcher, mock_phenotype_fetcher
     )
-    content = content_extractor.extract(paper, "CHI3L1")
+    content = await content_extractor.extract(paper, "CHI3L1")
     assert content == []
 
 
-def test_prompt_based_content_extractor_no_observations(
+async def test_prompt_based_content_extractor_no_observations(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     content_extractor = PromptBasedContentExtractor(
         [], mock_prompt({}), mock_observation([]), mock_phenotype_searcher, mock_phenotype_fetcher
     )
-    content = content_extractor.extract(paper, "CHI3L1")
+    content = await content_extractor.extract(paper, "CHI3L1")
     assert content == []
 
 
-def test_caching(
+async def test_caching(
     paper: Paper, mock_prompt: Any, mock_observation: Any, mock_phenotype_searcher: Any, mock_phenotype_fetcher: Any
 ) -> None:
     study_type = "case study"
@@ -864,10 +864,8 @@ def test_caching(
     pheno_fetcher = mock_phenotype_fetcher()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-
         # Mock get_run_path to return the temporary directory.
         with patch("lib.evagg.utils.cache.get_run_path", return_value=tmpdir):
-
             # verify no cache exists.
             assert not os.path.exists(
                 os.path.join(
@@ -877,7 +875,7 @@ def test_caching(
             content_extractor = PromptBasedContentExtractorCached(
                 ["study_type"], prompts, observation_finder, pheno_searcher, pheno_fetcher, use_previous_cache=False
             )
-            content = content_extractor.extract(paper, gene)
+            content = await content_extractor.extract(paper, gene)
 
             assert len(content) == 1
             assert content[0]["study_type"] == study_type
@@ -890,7 +888,7 @@ def test_caching(
             )
 
             # The injected dependencies will be exhausted, so if we don't use the cache, we'll get an error.
-            content = content_extractor.extract(paper, gene)
+            content = await content_extractor.extract(paper, gene)
 
             assert len(content) == 1
             assert content[0]["study_type"] == study_type
@@ -904,7 +902,7 @@ xmldoc = """
 """
 
 
-def test_fulltext() -> None:
+async def test_fulltext() -> None:
     xml1 = """
         <passage>
             <infon key="section_type">TITLE</infon>
@@ -920,7 +918,7 @@ def test_fulltext() -> None:
     assert get_fulltext(xmldoc.format(content=xml1), include=["TITLE"], exclude=["TITLE"]) == ""
 
 
-def test_fulltext_missing() -> None:
+async def test_fulltext_missing() -> None:
     xml1 = """
         <passage>
         </passage>

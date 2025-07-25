@@ -3,7 +3,8 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from lib.evagg.llm import IPromptClient
 from lib.evagg.ref import IFetchHPO, ISearchHPO
@@ -36,7 +37,8 @@ class PromptBasedContentExtractor(IExtractFields):
     _CACHE_PAPER_FIELDS = ["study_type"]
 
     # Read the system prompt from file
-    _SYSTEM_PROMPT = open(_get_prompt_file_path("system")).read()
+    with open(_get_prompt_file_path("system")) as f:
+        _SYSTEM_PROMPT = f.read()
 
     _DEFAULT_PROMPT_SETTINGS = {
         "max_tokens": 2048,
@@ -53,7 +55,7 @@ class PromptBasedContentExtractor(IExtractFields):
         observation_finder: IFindObservations,
         phenotype_searcher: ISearchHPO,
         phenotype_fetcher: IFetchHPO,
-        prompt_settings: Dict[str, Any] | None = None,
+        prompt_settings: dict[str, Any] | None = None,
     ) -> None:
         self._fields = fields
         self._llm_client = llm_client
@@ -64,7 +66,7 @@ class PromptBasedContentExtractor(IExtractFields):
             {**self._DEFAULT_PROMPT_SETTINGS, **prompt_settings} if prompt_settings else self._DEFAULT_PROMPT_SETTINGS
         )
 
-    def _get_lookup_field(self, gene_symbol: str, paper: Paper, ob: Observation, field: str) -> Tuple[str, str]:
+    def _get_lookup_field(self, gene_symbol: str, paper: Paper, ob: Observation, field: str) -> tuple[str, str]:
         if field == "evidence_id":
             # Create a unique identifier for this combination of paper, variant, and individual ID.
             value = ob.variant.get_unique_id(paper.id, ob.individual)
@@ -107,9 +109,8 @@ class PromptBasedContentExtractor(IExtractFields):
         return field, value
 
     async def _run_json_prompt(
-        self, prompt_filepath: str, params: Dict[str, str], prompt_settings: Dict[str, Any]
-    ) -> Dict[str, Any]:
-
+        self, prompt_filepath: str, params: dict[str, str], prompt_settings: dict[str, Any]
+    ) -> dict[str, Any]:
         prompt_settings = {**self._instance_prompt_settings, **prompt_settings}
 
         response = await self._llm_client.prompt_file(
@@ -127,7 +128,7 @@ class PromptBasedContentExtractor(IExtractFields):
 
         return result
 
-    async def _convert_phenotype_to_hpo(self, phenotype: List[str]) -> List[str]:
+    async def _convert_phenotype_to_hpo(self, phenotype: list[str]) -> list[str]:
         """Convert a list of unstructured phenotype descriptions to HPO/OMIM terms."""
         if not phenotype:
             return []
@@ -196,8 +197,8 @@ class PromptBasedContentExtractor(IExtractFields):
         return list(set(all_values))
 
     async def _observation_phenotypes_for_text(
-        self, text: str, description: str, metadata: Dict[str, str]
-    ) -> List[str]:
+        self, text: str, description: str, metadata: dict[str, str]
+    ) -> list[str]:
         all_phenotypes_result = await self._run_json_prompt(
             self._PROMPT_FIELDS["phenotype"],
             {"passage": text},
@@ -257,7 +258,7 @@ class PromptBasedContentExtractor(IExtractFields):
         # Duplicates are conceivable, get unique set again.
         return "; ".join(set(structured_phenotypes))
 
-    async def _run_field_prompt(self, gene_symbol: str, observation: Observation, field: str) -> Dict[str, Any]:
+    async def _run_field_prompt(self, gene_symbol: str, observation: Observation, field: str) -> dict[str, Any]:
         params = {
             # First element is full text of the observation, consider alternatives
             "passage": "\n\n".join([t.text for t in observation.texts]),
@@ -305,9 +306,8 @@ class PromptBasedContentExtractor(IExtractFields):
         gene_symbol: str,
         paper: Paper,
         ob: Observation,
-        cache: Dict[Any, asyncio.Task],
-    ) -> Dict[str, str]:
-
+        cache: dict[Any, asyncio.Task],
+    ) -> dict[str, str]:
         def _get_key(ob: Observation, field: str) -> Any:
             if field in self._CACHE_VARIANT_FIELDS:
                 return (ob.variant, field)
@@ -318,7 +318,7 @@ class PromptBasedContentExtractor(IExtractFields):
                 return field
             return None
 
-        async def _get_prompt_field(field: str) -> Tuple[str, str]:
+        async def _get_prompt_field(field: str) -> tuple[str, str]:
             # Use a cached task for variant fields if available.
             key = _get_key(ob, field)
             if key and key in cache:
@@ -343,26 +343,26 @@ class PromptBasedContentExtractor(IExtractFields):
         fields.update(await asyncio.gather(*[_get_prompt_field(f) for f in prompt_fields]))
         return fields
 
-    async def _extract_fields(self, paper: Paper, gene_symbol: str, obs: Sequence[Observation]) -> List[Dict[str, str]]:
+    async def _extract_fields(self, paper: Paper, gene_symbol: str, obs: Sequence[Observation]) -> list[dict[str, str]]:
         # TODO - because the returned observations include the text associated with each observation, it's not trivial
         # to pre-cache the variant level fields. We don't have any easy way to collect all the unique texts associated
         # with all observations of the same variant (but different individuals). As a temporary solution, we'll cache
         # the first finding of a variant-level result and use that only. This will not be robust to scenarios where the
         # texts associated with multiple observations of the same variant differ.
-        cache: Dict[Any, asyncio.Task] = {}
+        cache: dict[Any, asyncio.Task] = {}
         return await asyncio.gather(*[self._get_fields(gene_symbol, paper, ob, cache) for ob in obs])
 
-    def extract(self, paper: Paper, gene_symbol: str) -> Sequence[Dict[str, str]]:
+    async def extract(self, paper: Paper, gene_symbol: str) -> Sequence[dict[str, str]]:
         if not paper.props.get("can_access", False):
             logger.warning(f"Skipping {paper.id} because it is not licensed for access")
             return []
 
         # Find all the observations in the paper relating to the query.
-        observations = asyncio.run(self._observation_finder.find_observations(gene_symbol, paper))
+        observations = await self._observation_finder.find_observations(gene_symbol, paper)
         if not observations:
             logger.info(f"No observations found in {paper.id} for {gene_symbol}")
             return []
 
         # Extract all the requested fields from the observations.
         logger.info(f"Found {len(observations)} observations in {paper.id} for {gene_symbol}")
-        return asyncio.run(self._extract_fields(paper, gene_symbol, observations))
+        return await self._extract_fields(paper, gene_symbol, observations)

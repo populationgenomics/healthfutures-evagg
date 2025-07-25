@@ -38,7 +38,6 @@ def mock_comparator(mock_client: Any) -> Any:
 def test_sanity_check_failure(
     paper: Paper, mock_llm_client: Any, mock_factory: Any, mock_normalizer: Any, mock_comparator: Any
 ) -> None:
-
     # Remove the full text content for the paper.
     paper.props.pop("fulltext_xml")
 
@@ -529,7 +528,6 @@ def test_find_observations_g_dot_variant(
 def test_find_observations_rsid_variant(
     paper: Paper, mock_llm_client: Any, mock_factory: Any, mock_normalizer: Any, mock_comparator: Any
 ) -> None:
-
     llm_client = mock_llm_client(
         '{"relevant": true}',  # _sanity_check_paper -> _run_json_prompt
         '{"variants": ["rs8675309", "rs9035768"]}',  # _find_variant_descriptions -> _run_json_prompt (main text)

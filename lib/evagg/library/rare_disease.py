@@ -115,7 +115,7 @@ All of your responses should be provided in the form of a JSON object."""
                 "prompt_tag": "paper_category",
                 "prompt_metadata": prompt_metadata,
                 "temperature": 0.8,
-                "response_format": {"type": "json_object"}
+                "response_format": {"type": "json_object"},
             },
         )
 
@@ -194,7 +194,7 @@ All of your responses should be provided in the form of a JSON object."""
         await asyncio.gather(*[self._get_paper_categorizations(paper, query["gene_symbol"]) for paper in papers])
         return papers
 
-    def get_papers(self, query: dict[str, Any]) -> Sequence[Paper]:
+    async def get_papers(self, query: dict[str, Any]) -> Sequence[Paper]:
         """Search for papers based on the given query.
 
         Args:
@@ -203,5 +203,5 @@ All of your responses should be provided in the form of a JSON object."""
         Returns:
             Sequence[Paper]: The set of rare disease papers that match the query.
         """
-        all_papers = asyncio.run(self._get_all_papers(query))
+        all_papers = await self._get_all_papers(query)
         return list(filter(lambda p: p.props["disease_category"] in self._allowed_categories, all_papers))

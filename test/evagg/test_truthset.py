@@ -27,11 +27,11 @@ async def test_get_papers_error(mock_paper_client: Any, test_resources_path, jso
     library = TruthsetFileHandler(path, None, paper_client)  # type: ignore
     # On first call, mock paper client will return the wrong paper from fetch.
     with pytest.raises(ValueError) as e:
-        library.get_papers({"gene_symbol": "BAZ2B"})
+        await library.get_papers({"gene_symbol": "BAZ2B"})
     assert "Truthset mismatch" in str(e.value)
     # On second call, mock paper client will return None.
     with pytest.raises(ValueError) as e:
-        library.get_papers({"gene_symbol": "BAZ2B"})
+        await library.get_papers({"gene_symbol": "BAZ2B"})
     assert "Failed to fetch paper" in str(e.value)
 
     paper.props["can_access"] = False
@@ -50,9 +50,9 @@ async def test_get_observations(mock_paper_client: Any, mock_variant: Any, test_
     variant_client = mock_variant(variant1)
 
     library = TruthsetFileHandler(path, variant_client, paper_client)
-    papers = library.get_papers({"gene_symbol": "BAZ2B"})
+    papers = await library.get_papers({"gene_symbol": "BAZ2B"})
     assert {p.id for p in papers} == {"pmid:33057194", "pmid:28554332"}
-    assert library.get_papers({}) == []
+    assert await library.get_papers({}) == []
 
     obs1 = await library.find_observations("BAZ2B", papers[0])
     assert len(obs1) == 1
@@ -70,7 +70,7 @@ def test_get_evidence(mock_paper_client: Any, mock_variant: Any, test_resources_
 
     fields: List = DiContainer().create_instance({"di_factory": "fields/evidence_all.yaml"}, {})
     library = TruthsetFileHandler(path, variant_client, paper_client, fields)
-    fieldsets = library.extract(paper, "ZNF423")
+    fieldsets = await library.extract(paper, "ZNF423")
     assert len(fieldsets) == 1
     assert fieldsets[0]["hgvs_c"] == "c.1192C>T"
     assert fieldsets[0]["gene"] == "ZNF423"
@@ -80,5 +80,5 @@ def test_get_evidence(mock_paper_client: Any, mock_variant: Any, test_resources_
     fields.append("missing_field")
     library = TruthsetFileHandler(path, variant_client, paper_client, fields)
     with pytest.raises(ValueError) as e:
-        library.extract(paper, "ZNF423")
+        await library.extract(paper, "ZNF423")
     assert "Unsupported extraction fields" in str(e.value)

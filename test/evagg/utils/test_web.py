@@ -179,11 +179,7 @@ def test_mongodb_cache_miss(mock_client, mock_request, mock_mongo_collection):
 
 @patch("pymongo.MongoClient")
 def test_mongodb_auth_connection(mock_client):
-    MongoDBCachingWebClient(cache_settings={
-        "endpoint": "localhost:27017", 
-        "username": "user", 
-        "password": "pass"
-    })
-    
+    MongoDBCachingWebClient(cache_settings={"endpoint": "localhost:27017", "username": "user", "password": "pass"})
+
     # Verify that the correct connection string was used
     mock_client.assert_called_once_with("mongodb://user:pass@localhost:27017")

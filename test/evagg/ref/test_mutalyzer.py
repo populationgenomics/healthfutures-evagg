@@ -71,7 +71,6 @@ def test_normalize_caching(mock_web_client: Any) -> None:
 
 
 def test_normalize_service_error() -> None:
-
     class ThrowingWebClient(IWebContentClient):
         def __init__(self, error: Exception) -> None:
             self._error = error

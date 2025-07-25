@@ -116,12 +116,10 @@ def test_refseq_resource_caching(mock_web_client: Any) -> None:
 
 
 def test_refseqgene_resource_caching(mock_web_client: Any) -> None:
-
     with open("test/resources/LRG_RefSeqGene.tsv", "r") as f:
         web_client = mock_web_client(f.read())
 
     with tempfile.TemporaryDirectory() as temp_dir:
-
         # First, remove the actual temp_dir so that we're forced to create it.
         os.rmdir(temp_dir)
 

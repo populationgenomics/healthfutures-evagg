@@ -129,7 +129,7 @@ def mock_writer(mock_client: type) -> IWriteOutput:
     return mock_client(IWriteOutput)
 
 
-def test_evagg_paper_query_app(json_load, mock_library: Any, mock_extractor: Any, mock_writer: Any):
+async def test_evagg_paper_query_app(json_load, mock_library: Any, mock_extractor: Any, mock_writer: Any):
     spec = {
         "di_factory": "lib.evagg.app.PaperQueryApp",
         "queries": [{"gene_symbol": "test"}],
@@ -144,11 +144,11 @@ def test_evagg_paper_query_app(json_load, mock_library: Any, mock_extractor: Any
         "mock_writer": mock_writer(None),
     }
     _current_run.elapsed_secs = None  # Reset elapsed_secs to avoid error on multiple runs in the same test.
-    DiContainer().create_instance(spec, resources).execute()
+    await DiContainer().create_instance(spec, resources).execute()
     # Undo run completion to avoid polluting other tests
     _current_run.elapsed_secs = None
 
     # Test missing query gene_symbol.
     with pytest.raises(ValueError):
         spec["queries"] = [{}]
-        DiContainer().create_instance(spec, resources).execute()
+        await DiContainer().create_instance(spec, resources).execute()
