@@ -42,6 +42,7 @@ class Observation:
     patient_descriptions: list[str]
     texts: list[TextSection]
     paper_id: str
+    full_text: str
 
 
 class IFindVariants(Protocol):

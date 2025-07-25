@@ -64,11 +64,26 @@ class ObservationFinder(IFindObservations):
         variant_factory: ICreateVariants,
         variant_comparator: ICompareVariants,
         variant_finder: IFindVariants,
+        skip_focus_texts: bool = False,
     ) -> None:
+        """Initialize the ObservationFinder.
+
+        Args:
+            llm_client: Client for making LLM prompt calls
+            variant_factory: Factory for creating variant objects from text descriptions
+            variant_comparator: Tool for consolidating equivalent variants
+            variant_finder: Tool for finding variant descriptions in text
+            skip_focus_texts: If True, skip processing individual table/focus sections and
+                only analyze the full paper text. This enables KV cache prefix reuse by
+                ensuring all prompts for a paper use the same text context, significantly
+                improving cache efficiency. Trade-off: may miss variants mentioned only
+                in tables. Defaults to False for maximum variant discovery.
+        """
         self._llm_client = llm_client
         self._variant_factory = variant_factory
         self._variant_comparator = variant_comparator
         self._variant_finder = variant_finder
+        self._skip_focus_texts = skip_focus_texts
 
     async def _run_json_prompt(
         self, prompt_filepath: str, params: dict[str, str], prompt_settings: dict[str, Any]
@@ -156,12 +171,16 @@ class ObservationFinder(IFindObservations):
         # If there are focus texts (tables), assume lists of patients are available in those tables and cross-check.
         # If there are no focus texts, use the full text of the paper.
         if len(patients_after_splitting) >= 5:
-            texts_to_check = focus_texts if focus_texts else [full_text]
-            checked_patients = await self._check_patients(patients_after_splitting, texts_to_check)
-
-            if not checked_patients and texts_to_check == focus_texts:
-                # All patients failed checking in focus texts, try the full text.
+            if self._skip_focus_texts:
+                # Use consistent full text context for cache optimization
                 checked_patients = await self._check_patients(patients_after_splitting, [full_text])
+            else:
+                texts_to_check = focus_texts if focus_texts else [full_text]
+                checked_patients = await self._check_patients(patients_after_splitting, texts_to_check)
+
+                if not checked_patients and texts_to_check == focus_texts:
+                    # All patients failed checking in focus texts, try the full text.
+                    checked_patients = await self._check_patients(patients_after_splitting, [full_text])
         else:
             checked_patients = patients_after_splitting
 
@@ -201,6 +220,11 @@ class ObservationFinder(IFindObservations):
             return "", []
 
         full_text = get_fulltext(paper.props["fulltext_xml"], exclude=["AUTH_CONT", "ACK_FUND", "COMP_INT", "REF"])
+
+        # Skip focus text processing if configured for cache optimization
+        if self._skip_focus_texts:
+            return full_text, []
+
         table_sections = list(get_sections(paper.props["fulltext_xml"], include=["TABLE"]))
 
         table_ids = {t.id for t in table_sections}
@@ -427,7 +451,10 @@ class ObservationFinder(IFindObservations):
         # Do this using the consolidated list of variants to reduce the number of AOAI calls.
         async def _check_variant_gene_relationship(consolidated_variant: HGVSVariant) -> None:
             descriptions = [d for d, v in variants_by_description.items() if v in cons_map[consolidated_variant]]
-            mentioning_text = self._get_text_mentioning_variant(paper, descriptions, consolidated_variant.valid)
+            if self._skip_focus_texts:
+                mentioning_text = full_text
+            else:
+                mentioning_text = self._get_text_mentioning_variant(paper, descriptions, consolidated_variant.valid)
             warning_text = """
 Note that this variant failed validation when considered as part of the gene of interest, so it's likely that the
 variant isn't actually associated with the gene. But the possibility of previous error exists, so please check again.
@@ -504,19 +531,27 @@ variant isn't actually associated with the gene. But the possibility of previous
                     continue
                 if individual == "unmatched_variants":
                     individual = "unknown"
+                # Set texts and full_text based on skip_focus_texts setting for cache optimization
+                if self._skip_focus_texts:
+                    # Use empty texts list to prevent separate table processing in phenotype extraction
+                    texts = []
+                    observation_full_text = full_text
+                else:
+                    # Recreate the generator each time.
+                    texts = list(
+                        get_sections(paper.props["fulltext_xml"], exclude=["AUTH_CONT", "ACK_FUND", "COMP_INT", "REF"])
+                    )
+                    observation_full_text = "\n\n".join([t.text for t in texts])
+
                 observations.append(
                     Observation(
                         variant=variant,
                         individual=individual,
                         variant_descriptions=list(set(descriptions)),
                         patient_descriptions=[individual],
-                        # Recreate the generator each time.
-                        texts=list(
-                            get_sections(
-                                paper.props["fulltext_xml"], exclude=["AUTH_CONT", "ACK_FUND", "COMP_INT", "REF"]
-                            )
-                        ),
+                        texts=texts,
                         paper_id=paper.id,
+                        full_text=observation_full_text,
                     )
                 )
 

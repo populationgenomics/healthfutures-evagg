@@ -231,8 +231,6 @@ class PromptBasedContentExtractor(IExtractFields):
         return observation_acronymns_result.get("phenotypes", [])
 
     async def _generate_phenotype_field(self, gene_symbol: str, observation: Observation) -> str:
-        # Obtain all the phenotype strings listed in the text associated with the gene.
-        fulltext = "\n\n".join([t.text for t in observation.texts])
         # TODO: treating all tables in paper as a single text, maybe this isn't ideal, consider grouping by 'id'
         table_texts = "\n\n".join([t.text for t in observation.texts if t.section_type == "TABLE"])
 
@@ -245,7 +243,7 @@ class PromptBasedContentExtractor(IExtractFields):
             obs_desc = f"the variant described as {v_sub}."
 
         # Run phenotype extraction for all the texts of interest.
-        texts = [fulltext]
+        texts = [observation.full_text]
         if table_texts != "":
             texts.append(table_texts)
         metadata = {"gene_symbol": gene_symbol, "paper_id": observation.paper_id}
@@ -260,8 +258,8 @@ class PromptBasedContentExtractor(IExtractFields):
 
     async def _run_field_prompt(self, gene_symbol: str, observation: Observation, field: str) -> dict[str, Any]:
         params = {
-            # First element is full text of the observation, consider alternatives
-            "passage": "\n\n".join([t.text for t in observation.texts]),
+            # Use observation.full_text for consistent cache context
+            "passage": observation.full_text,
             "variant_descriptions": ", ".join(observation.variant_descriptions),
             "patient_descriptions": ", ".join(observation.patient_descriptions),
             "gene": gene_symbol,
