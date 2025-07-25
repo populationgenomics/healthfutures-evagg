@@ -1,4 +1,4 @@
-Text: {{$text}}
+{{$text}}
 
 Above you will find one or more descriptions of a genetic variant, and a gene of interest. I want you to search the 
 subsequent text to assess whether the variant of interest is in the gene of interest, or whether there isn't evidence

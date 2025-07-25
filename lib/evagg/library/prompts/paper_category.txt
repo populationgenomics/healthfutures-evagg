@@ -6,18 +6,24 @@ Given the paper's title and abstract below, your task is to categorize the paper
 
 Use both the title and abstract to make your determination of the category ("genetic disease" or "other").
 
-Below are the title and abstract:
-
-Title: {{$title}}
-Abstract: {{$abstract}}
-
 Provide your response as a JSON object with a single "category" field containing either "genetic disease" or "other". 
 
 Example: {"category": "genetic disease"} or {"category": "other"}
 
 When considering the provided criteria, remember to focus on the content of the title and abstract without overfitting to specific examples. The goal is to ensure high precision and recall for identifying genetic disease papers in general.
 
+---
+
 {{$positive_examples}}
 
+---
 
 {{$negative_examples}}
+
+---
+
+Below are the title and abstract of the paper under consideration:
+
+Title: {{$title}}
+Abstract: {{$abstract}}
+
