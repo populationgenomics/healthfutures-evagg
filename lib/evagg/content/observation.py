@@ -56,17 +56,7 @@ async def run_json_prompt(
 
 
 class ObservationFinder(IFindObservations):
-    _SYSTEM_PROMPT = """
-You are an intelligent assistant to a genetic analyst. Their task is to identify the genetic variant or variants that
-are causing a patient's disease. One approach they use to solve this problem is to seek out evidence from the academic
-literature that supports (or refutes) the potential causal role that a given variant is playing in a patient's disease.
-
-As part of that process, you will assist the analyst in identifying observations of genetic variation in human
-subjects/patients.
-
-All of your responses should be provided in the form of a JSON object. These responses should never include long,
-uninterrupted sequences of whitespace characters.
-"""
+    _SYSTEM_PROMPT = open(os.path.join(os.path.dirname(__file__), "prompts", "system.txt")).read()
 
     def __init__(
         self,
