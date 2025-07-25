@@ -125,7 +125,7 @@ class OpenAIClient(IPromptClient):
                 if connection_errors == 0:
                     logger.warning(f"Connectivity error on {prompt_tag}: {e.message}")
                 connection_errors += 1
-                sleep_time = min(30, 2 ** connection_errors)
+                sleep_time = min(30, 2**connection_errors)
                 logger.info(f"Retrying in {sleep_time} seconds... (attempt {connection_errors}/5)")
                 await asyncio.sleep(sleep_time)
 
@@ -141,13 +141,19 @@ class OpenAIClient(IPromptClient):
             "prompt_response_metadata": {
                 "prompt_tokens": completion.usage.prompt_tokens,
                 "completion_tokens": completion.usage.completion_tokens,
-                "cached_tokens": (
-                    completion.usage.prompt_tokens_details.cached_tokens
-                    if (completion and hasattr(completion.usage, "prompt_tokens_details"))
-                    else -1
-                ),
             },
         }
+
+        # Note: Llama.cpp's OpenAI API returns prompt_tokens_details as None.
+        if hasattr(completion.usage, "prompt_tokens_details") and completion.usage.prompt_tokens_details:
+            prompt_log["prompt_response_metadata"]["cached_tokens"] = (
+                completion.usage.prompt_tokens_details.cached_tokens
+            )
+
+        # Llama.cpp's OpenAI API returns a timings section that contains prompt caching stats.
+        if hasattr(completion, "timings") and completion.timings:
+            for key, value in completion.timings.items():
+                prompt_log["prompt_response_metadata"][key] = value
 
         logger.log(PROMPT, f"Chat '{prompt_tag}' complete in {elapsed:.1f} seconds.", extra=prompt_log)
         return response
@@ -214,7 +220,7 @@ class OpenAIClient(IPromptClient):
                         raise
                     logger.warning("Connectivity error on embeddings, retrying...")
                     connection_errors += 1
-                    sleep_time = min(30, 2 ** connection_errors)
+                    sleep_time = min(30, 2**connection_errors)
                     await asyncio.sleep(sleep_time)
 
         start_overall = time.time()
