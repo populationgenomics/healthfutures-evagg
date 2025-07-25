@@ -175,7 +175,7 @@ class OpenAIClient(IPromptClient):
 
         settings = {
             "max_tokens": 1024,
-            "frequency_penalty": 0,
+            "frequency_penalty": 0.5,
             "presence_penalty": 0,
             "temperature": 0.7,
             "model": self._config.model,

@@ -49,5 +49,7 @@ or alternatively:
     "patients": ["unknown"]
 }
 
+IMPORTANT: Do not repeat patient identifiers in the response, i.e. they must be unique in the list.
+
 Do not provide any additional text in your response other than the json object.
 
