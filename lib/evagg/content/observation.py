@@ -90,15 +90,20 @@ class ObservationFinder(IFindObservations):
     ) -> dict[str, Any]:
         return await run_json_prompt(self._llm_client, prompt_filepath, params, prompt_settings, self._SYSTEM_PROMPT)
 
-    async def _check_patients(self, patient_candidates: Sequence[str], texts_to_check: Sequence[str]) -> list[str]:
+    async def _check_patients(
+        self, patient_candidates: Sequence[str], texts_to_check: Sequence[str], metadata: dict[str, str] | None = None
+    ) -> list[str]:
         checked_patients: list[str] = []
 
         async def check_patient(patient: str) -> None:
             for text in texts_to_check:
+                prompt_settings = {"prompt_tag": "observation__check_patients"}
+                if metadata:
+                    prompt_settings["prompt_metadata"] = metadata
                 validation_response = await self._run_json_prompt(
                     prompt_filepath=_get_prompt_file_path("check_patients"),
                     params={"text": text, "patient": patient},
-                    prompt_settings={"prompt_tag": "observation__check_patients"},
+                    prompt_settings=prompt_settings,
                 )
                 if validation_response.get("is_patient", False) is True:
                     checked_patients.append(patient)
@@ -173,14 +178,14 @@ class ObservationFinder(IFindObservations):
         if len(patients_after_splitting) >= 5:
             if self._skip_focus_texts:
                 # Use consistent full text context for cache optimization
-                checked_patients = await self._check_patients(patients_after_splitting, [full_text])
+                checked_patients = await self._check_patients(patients_after_splitting, [full_text], metadata)
             else:
                 texts_to_check = focus_texts if focus_texts else [full_text]
-                checked_patients = await self._check_patients(patients_after_splitting, texts_to_check)
+                checked_patients = await self._check_patients(patients_after_splitting, texts_to_check, metadata)
 
                 if not checked_patients and texts_to_check == focus_texts:
                     # All patients failed checking in focus texts, try the full text.
-                    checked_patients = await self._check_patients(patients_after_splitting, [full_text])
+                    checked_patients = await self._check_patients(patients_after_splitting, [full_text], metadata)
         else:
             checked_patients = patients_after_splitting
 

@@ -128,7 +128,9 @@ class PromptBasedContentExtractor(IExtractFields):
 
         return result
 
-    async def _convert_phenotype_to_hpo(self, phenotype: list[str]) -> list[str]:
+    async def _convert_phenotype_to_hpo(
+        self, phenotype: list[str], metadata: dict[str, str] | None = None
+    ) -> list[str]:
         """Convert a list of unstructured phenotype descriptions to HPO/OMIM terms."""
         if not phenotype:
             return []
@@ -156,36 +158,46 @@ class PromptBasedContentExtractor(IExtractFields):
                 candidates.add(candidate)
 
             if candidates:
+                prompt_settings = {"prompt_tag": "phenotypes_candidates"}
+                if metadata:
+                    prompt_settings["prompt_metadata"] = metadata
                 response = await self._run_json_prompt(
                     _get_prompt_file_path("phenotypes_candidates"),
                     params={"term": term, "candidates": "\n".join(candidates)},
-                    prompt_settings={"prompt_tag": "phenotypes_candidates"},
+                    prompt_settings=prompt_settings,
                 )
                 return response.get("match")
 
             return None
 
-        # Alternatively, search for the term in the HPO database, use AOAI to determine which of the results appears
-        # to be the best match.
+        # Phase 1: Try phenotypes_candidates for all original terms
         for term in phenotype.copy():
             match = await _get_match_for_term(term)
             if match:
                 match_dict[term] = match
                 phenotype.remove(term)
 
-        # Before we give up, try again with a simplified version of the term.
-        for term in phenotype.copy():
-            response = await self._run_json_prompt(
-                _get_prompt_file_path("phenotypes_simplify"),
-                params={"term": term},
-                prompt_settings={"prompt_tag": "phenotypes_simplify"},
-            )
+        # Phase 2: For remaining terms, batch simplify them all at once
+        if phenotype:  # Only if there are still unmatched terms
+            simplified_terms = {}
+            for term in phenotype.copy():
+                prompt_settings = {"prompt_tag": "phenotypes_simplify"}
+                if metadata:
+                    prompt_settings["prompt_metadata"] = metadata
+                response = await self._run_json_prompt(
+                    _get_prompt_file_path("phenotypes_simplify"),
+                    params={"term": term},
+                    prompt_settings=prompt_settings,
+                )
+                if simplified := response.get("simplified"):
+                    simplified_terms[term] = simplified
 
-            if simplified := response.get("simplified"):
-                match = await _get_match_for_term(simplified)
+            # Phase 3: Try phenotypes_candidates for all simplified terms
+            for original_term, simplified_term in simplified_terms.items():
+                match = await _get_match_for_term(simplified_term)
                 if match:
-                    match_dict[f"{term} (S)"] = match
-                    phenotype.remove(term)
+                    match_dict[f"{original_term} (S)"] = match
+                    phenotype.remove(original_term)
 
         all_values = list(match_dict.values())
         logger.info(f"Converted phenotypes: {match_dict}")
@@ -251,7 +263,7 @@ class PromptBasedContentExtractor(IExtractFields):
         observation_phenotypes = list({item.lower() for sublist in result for item in sublist})
 
         # Now convert this phenotype list to OMIM/HPO ids.
-        structured_phenotypes = await self._convert_phenotype_to_hpo(observation_phenotypes)
+        structured_phenotypes = await self._convert_phenotype_to_hpo(observation_phenotypes, metadata)
 
         # Duplicates are conceivable, get unique set again.
         return "; ".join(set(structured_phenotypes))

@@ -1,7 +1,4 @@
-You are trying to determine the HPO or OMIM entry that corresponds to the following description of a disease or disease
-phenotype:
-
-{{$term}}
+You are trying to determine the HPO or OMIM entry that corresponds to a specific description of a disease or disease phenotype.
 
 Select zero or one entries from the list of candidates below. For each candidate you have been provided the name
 of the ontology term, its ID, its definition, and optionally a list of synonymous terms.
